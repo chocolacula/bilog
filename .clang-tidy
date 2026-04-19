@@ -1,0 +1,29 @@
+Checks: >
+  *,
+  -altera-struct-pack-align,
+  -altera-unroll-loops,
+  -cert-dcl21-cpp,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -fuchsia-overloaded-operator,
+  -fuchsia-default-arguments-calls,
+  -google-readability-todo,
+  -hicpp-avoid-c-arrays,
+  -llvmlibc-*,
+  -llvm-namespace-comment,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -hicpp-explicit-conversions,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  google-explicit-constructor,
+
+CheckOptions:
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case

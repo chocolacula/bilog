@@ -1,0 +1,3 @@
+[INFO] Server started port: 8080 node: stage1 date: today
+[WARN] High memory usage percent: 85.6
+[ERROR] Connection failed retries: 3

@@ -1,0 +1,12 @@
+---
+BasedOnStyle: Google
+TabWidth: 2
+ColumnLimit: 100
+PenaltyBreakComment: 200
+InsertNewlineAtEOF: true
+BinPackArguments: false
+BinPackParameters: false
+# BreakConstructorInitializers: AfterColon
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+KeepEmptyLinesAtTheStartOfBlocks: true

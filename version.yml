@@ -1,0 +1,7 @@
+version: 0.1.0
+
+template: "$major.$minor.$patch"
+
+source:
+  - file: ./CMakeLists.txt
+    template: project(bilog VERSION $version)

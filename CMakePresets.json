@@ -1,0 +1,51 @@
+{
+  "version": 4,
+  "include": [
+    "build/Release/generators/CMakePresets.json"
+  ],
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "Debug",
+      "toolchainFile": "build/Debug/generators/conan_toolchain.cmake",
+      "binaryDir": "build/Debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS_INIT": "-fprofile-instr-generate -fcoverage-mapping"
+      }
+    },
+    {
+      "name": "Release",
+      "toolchainFile": "build/Release/generators/conan_toolchain.cmake",
+      "binaryDir": "build/Release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Debug",
+      "configurePreset": "Debug",
+      "jobs": 8
+    },
+    {
+      "name": "Release",
+      "configurePreset": "Release",
+      "jobs": 8
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "Debug",
+      "configurePreset": "Debug",
+      "execution": {
+        "jobs": 8
+      }
+    }
+  ]
+}

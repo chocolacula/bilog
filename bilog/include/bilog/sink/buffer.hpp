@@ -1,0 +1,53 @@
+#pragma once
+
+#include <cstddef>
+#include <cstring>
+#include <new>
+
+namespace bilog {
+
+template <typename SinkT>
+class Buffer {
+  std::byte* data_ = nullptr;
+  size_t cursor_{};
+  SinkT* sink_ = nullptr;
+
+ public:
+  explicit Buffer(std::size_t size) : data_(new (std::align_val_t(64)) std::byte[size]) {}
+  Buffer(Buffer&& other) = default;
+  Buffer& operator=(Buffer&& other) = default;
+
+  ~Buffer() {
+    if (sink_ != nullptr) {
+      sink_->flush(this);
+    }
+    delete[] data_;
+  }
+
+  void set_sink(SinkT* sink) {
+    sink_ = sink;
+  }
+
+  void append(std::byte b) {
+    data_[cursor_++] = b;
+  }
+
+  void append(const std::byte* data, size_t size) {
+    std::memcpy(data_ + cursor_, data, size);
+    cursor_ += size;
+  }
+
+  [[nodiscard]] const std::byte* data() const {
+    return data_;
+  }
+
+  [[nodiscard]] std::size_t size() const {
+    return cursor_;
+  }
+
+  void clear() {
+    cursor_ = 0;
+  }
+};
+
+}  // namespace bilog

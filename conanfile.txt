@@ -1,0 +1,15 @@
+[requires]
+rapidjson/cci.20250205
+tclap/1.2.5
+
+[test_requires]
+gtest/1.17.0
+benchmark/1.9.5
+spdlog/1.17.0
+
+[generators]
+CMakeToolchain
+CMakeDeps
+
+[layout]
+cmake_layout
