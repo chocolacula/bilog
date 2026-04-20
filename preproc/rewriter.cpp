@@ -7,22 +7,37 @@
 
 namespace preproc {
 
+namespace {
+
+// Map a chain-call method name to the schema field type code.
+// Returns empty string if the call does not contribute a field type
+// (e.g., level starters like info/warn/error, or the synthetic cs_val
+// which shares a field with its preceding cs call).
+std::string method_field_type(const std::string& m) {
+  if (m == "i" || m == "b" || m == "f" || m == "s") return m;
+  if (m == "cs") return "cs";
+  return {};  // level methods, cs_val, write
+}
+
+bool is_level_method(const std::string& m) {
+  return m == "trace" || m == "debug" || m == "info" || m == "warn" || m == "error" ||
+         m == "fatal";
+}
+
+}  // namespace
+
 void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
-  // used_* tracks all IDs that are spoken for (schema + source + newly allocated).
-  // claimed_events tracks IDs assigned to a call this run — detects duplicates.
   std::set<std::uint64_t> used_events;
   std::set<std::uint64_t> used_tags;
   std::set<std::uint64_t> claimed_events;
 
-  // Seed from schema
   for (const auto& [name, id] : schema.tag_ids) {
     used_tags.insert(id);
   }
-  for (const auto& [id, positions] : schema.event_positions) {
+  for (const auto& [id, fields] : schema.event_fields) {
     used_events.insert(id);
   }
 
-  // Reserve all source event IDs so alloc_event skips them.
   for (const auto& analysis : analyses) {
     for (const auto& call : analysis.calls) {
       if (!call.existing_ids.empty()) {
@@ -52,14 +67,12 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
     return id;
   };
 
-  // Clear event_positions — rebuild from source only (removes stale events).
-  schema.event_positions.clear();
+  schema.event_fields.clear();
 
   for (auto& analysis : analyses) {
     for (auto& call : analysis.calls) {
       if (call.chain.empty()) continue;
 
-      // --- resolve tag IDs from schema (by string) ---
       std::vector<std::uint64_t> tag_ids;
       tag_ids.reserve(call.chain.size());
 
@@ -79,9 +92,6 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
         }
       }
 
-      // --- resolve event ID ---
-      // Keep source event ID if it hasn't been claimed by another call yet.
-      // If duplicate or missing, allocate a new one.
       std::uint64_t event_id;
       if (!call.existing_ids.empty() && claimed_events.count(call.existing_ids[0]) == 0) {
         event_id = call.existing_ids[0];
@@ -97,30 +107,25 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
         new_ids.push_back(tid);
       }
 
-      // --- update schema with event positions ---
-      // Track the flat position in the decoded value stream.
-      // Each ChainCall normally starts a new pair (+2 positions).
-      // "cstr_val" is the second tag within the same pair (+1 position).
-      std::vector<std::size_t> positions;
-      positions.reserve(call.chain.size());
-      std::size_t flat_pos = 2;  // skip pair 0 (event_id, level)
-      for (std::size_t i = 0; i < call.chain.size(); ++i) {
-        positions.push_back(flat_pos);
-        if (call.chain[i].method == "cstr_val") {
-          ++flat_pos;  // second tag in the same pair, advance to next pair
-        } else if (i + 1 < call.chain.size() && call.chain[i + 1].method == "cstr_val") {
-          ++flat_pos;  // first tag of cstr pair, next entry takes the second slot
-        } else {
-          flat_pos += 2;  // normal pair, skip to next
+      // Build the ordered list of dynamic field type codes.
+      // Skip the level-method call (first chain entry contributes the msg tag).
+      // Skip cs_val (part of the preceding cs field).
+      std::vector<std::string> fields;
+      fields.reserve(call.chain.size());
+      for (const auto& chain_call : call.chain) {
+        if (is_level_method(chain_call.method)) continue;
+        auto ft = method_field_type(chain_call.method);
+        if (!ft.empty()) {
+          fields.push_back(std::move(ft));
         }
       }
-      schema.event_positions[event_id] = std::move(positions);
+      schema.event_fields[event_id] = std::move(fields);
 
       call.existing_ids = std::move(new_ids);
     }
   }
 
-  // Clean stale tags: remove tags from schema that no longer appear in any source.
+  // Clean stale tags
   std::set<std::uint64_t> live_tags;
   for (const auto& analysis : analyses) {
     for (const auto& call : analysis.calls) {

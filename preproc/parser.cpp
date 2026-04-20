@@ -22,7 +22,7 @@ std::vector<std::uint64_t> parse_id_list(std::string_view src, std::size_t start
   return ids;
 }
 
-// Returns 1 or 2 ChainCalls. Methods like cstr() have two string args,
+// Returns 1 or 2 ChainCalls. Methods like cs() have two string args,
 // each needing its own tag ID.
 std::vector<ChainCall> parse_chain_calls(std::string_view src, std::size_t& cur) {
   skip_ws(src, cur);
@@ -68,14 +68,14 @@ std::vector<ChainCall> parse_chain_calls(std::string_view src, std::size_t& cur)
   call.tag = first_tag.value_or("");
   result.push_back(std::move(call));
 
-  // For cstr: parse the second string argument as a separate tag
-  if (method == "cstr") {
+  // For cs: parse the second string argument as a separate tag
+  if (method == "cs") {
     skip_ws(src, arg_cur);
     if (arg_cur < *paren_close && src[arg_cur] == ',') {
       ++arg_cur;
       auto second_tag = parse_string_literal(src, arg_cur);
       ChainCall val_call;
-      val_call.method = "cstr_val";
+      val_call.method = "cs_val";
       val_call.tag = second_tag.value_or("");
       result.push_back(std::move(val_call));
     }

@@ -33,9 +33,9 @@ void bilog_write_file(benchmark::State& state) {
   for (auto _ : state) {
     bilog::log({0, 1, 2, 3, 4, 5})
         .info("System status updated,")
-        .num("request count 1sec:", 42)
-        .num("latency ratio 1sec:", std::numbers::pi_v<double>)
-        .cstr("last payload:", "alpha beta gamma delta epsilon")
+        .i("request count 1sec:", 42)
+        .f("latency ratio 1sec:", std::numbers::pi_v<double>)
+        .cs("last payload:", "alpha beta gamma delta epsilon")
         .write();
   }
 }

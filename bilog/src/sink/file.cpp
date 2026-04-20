@@ -10,7 +10,6 @@ void FileSink::write_file(Buffer<FileSink>* lb, const std::byte* data, std::size
     file_.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
     return;
   }
-
   flush(lb);
   lb->append(data, size);
 }

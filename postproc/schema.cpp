@@ -28,13 +28,15 @@ Schema load_schema(const std::filesystem::path& path) {
     for (const auto& entry : doc["events"].GetObject()) {
       if (!entry.value.IsArray()) continue;
       auto event_id = static_cast<std::uint64_t>(std::stoull(entry.name.GetString()));
-      std::vector<std::size_t> positions;
-      for (const auto& pos : entry.value.GetArray()) {
-        if (pos.IsUint64()) {
-          positions.push_back(static_cast<std::size_t>(pos.GetUint64()));
+      std::vector<bilog::FieldType> fields;
+      for (const auto& item : entry.value.GetArray()) {
+        if (!item.IsString()) continue;
+        bilog::FieldType ft = bilog::FieldType::Int;
+        if (bilog::parse_field_type(item.GetString(), ft)) {
+          fields.push_back(ft);
         }
       }
-      schema.event_positions[event_id] = std::move(positions);
+      schema.event_fields[event_id] = std::move(fields);
     }
   }
 

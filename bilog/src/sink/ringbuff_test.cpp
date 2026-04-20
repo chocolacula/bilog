@@ -90,15 +90,6 @@ TEST(RingBuffSink, WrapAround) {
   EXPECT_EQ(bilog::test::drain_str(&buf, sink), "BBBBBBBB");
 }
 
-TEST(RingBuffSink, AutoCommitOnNewline) {
-  bilog::RingBuffSink sink(128);
-  buf_t buf(bilog::RingBuffSink::kBuffCap);
-  std::string_view msg = "hello\n";
-  sink.write(&buf, reinterpret_cast<const std::byte*>(msg.data()), msg.size());
-  // '\n' triggers auto-commit
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "hello\n");
-}
-
 // --- Multithreaded tests ---
 
 TEST(RingBuffSink, MultithreadedWrites) {
@@ -115,8 +106,8 @@ TEST(RingBuffSink, MultithreadedWrites) {
       for (int i = 0; i < kLinesPerThread; ++i) {
         auto line = "T" + std::to_string(t) + ":" + std::to_string(i) + "\n";
         sink.write(&buf, reinterpret_cast<const std::byte*>(line.data()), line.size());
+        sink.commit(&buf);
       }
-      sink.flush(&buf);
     });
   }
 
@@ -153,8 +144,8 @@ TEST(RingBuffSink, NoInterleaving) {
       chunk += '\n';
       for (int i = 0; i < kWrites; ++i) {
         sink.write(&buf, reinterpret_cast<const std::byte*>(chunk.data()), chunk.size());
+        sink.commit(&buf);
       }
-      sink.flush(&buf);
     });
   }
 

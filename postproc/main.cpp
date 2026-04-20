@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
       bilog::FileSink stdout_sink(std::move(stdout_stream));
       std::size_t count = 0;
       while (formatter.has_data()) {
-        if (!formatter.format(buf, stdout_sink, schema.tag_names, schema.event_positions)) {
+        if (!formatter.format(buf, stdout_sink, schema.tag_names, schema.event_fields)) {
           break;
         }
         ++count;
@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
       bilog::FileSink file_sink(output_path);
       std::size_t count = 0;
       while (formatter.has_data()) {
-        if (!formatter.format(buf, file_sink, schema.tag_names, schema.event_positions)) {
+        if (!formatter.format(buf, file_sink, schema.tag_names, schema.event_fields)) {
           break;
         }
         ++count;

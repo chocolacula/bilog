@@ -145,8 +145,8 @@ class TestIntegration(unittest.TestCase):
 
         test_source.write_text(
             source.replace(
-                '.cstr("node:", "stage1")',
-                '.cstr("node:", "stage1").num("count:", 1U)',
+                '.cs("node:", "stage1")',
+                '.cs("node:", "stage1").i("count:", 1U)',
             )
         )
 
@@ -161,7 +161,7 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("date:", tags)
 
         event = list(schema["events"]["0"])
-        self.assertEqual(len(event), 6)
+        self.assertEqual(event, ["i", "cs", "i", "s"])
 
     def test_preproc_missing_write(self):
         """preproc errors on bilog::log() chain without .write()"""
@@ -170,7 +170,7 @@ class TestIntegration(unittest.TestCase):
         test_source.write_text(dedent("""\
             #include "bilog/bilog.hpp"
             void f() {
-              bilog::log({}).info("oops").num("n:", 1U);
+              bilog::log({}).info("oops").i("n:", 1U);
             }
             """)
         )

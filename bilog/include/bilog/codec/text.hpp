@@ -62,6 +62,7 @@ class TextEncoder {
   template <typename SinkT>
   void finish(Buffer<SinkT>* lb, SinkT* sink) {
     sink->write_byte(lb, static_cast<std::byte>('\n'));
+    sink->commit(lb);
     pair_index_ = 0;
   }
 
@@ -87,6 +88,11 @@ class TextEncoder {
 
   template <typename SinkT, typename T>
   static void write_tag_str(Buffer<SinkT>* /*lb*/, SinkT* /*sink*/, const T& /*val*/) {}
+
+  template <typename SinkT>
+  static void write_value(Buffer<SinkT>* lb, SinkT* sink, bool val) {
+    write_str(lb, sink, val ? std::string_view("true") : std::string_view("false"));
+  }
 
   template <typename SinkT, std::integral T>
   static void write_value(Buffer<SinkT>* lb, SinkT* sink, const T& val) {

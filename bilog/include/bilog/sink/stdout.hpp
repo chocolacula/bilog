@@ -26,7 +26,12 @@ class StdoutSink {
   };
   static constexpr std::string_view kReset = "\033[0m";
   static constexpr std::string_view kTags[] = {
-      "[TRACE]", "[DEBUG]", "[INFO]", "[WARN]", "[ERROR]", "[FATAL]",
+      "[TRACE]",
+      "[DEBUG]",
+      "[INFO]",
+      "[WARN]",
+      "[ERROR]",
+      "[FATAL]",
   };
 
  public:
@@ -42,16 +47,14 @@ class StdoutSink {
 
   void write(Buffer<StdoutSink>* lb, const std::byte* data, std::size_t size) {
     lb->append(data, size);
-    if (size > 0 && data[size - 1] == static_cast<std::byte>('\n')) {
-      flush(lb);
-    }
   }
 
   void write_byte(Buffer<StdoutSink>* lb, std::byte b) {
     lb->append(b);
-    if (b == static_cast<std::byte>('\n')) {
-      flush(lb);
-    }
+  }
+
+  void commit(Buffer<StdoutSink>* lb) {
+    flush(lb);
   }
 
   void flush(Buffer<StdoutSink>* lb);

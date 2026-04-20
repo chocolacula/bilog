@@ -47,7 +47,7 @@ int main() {
 
   bilog::log({0, 0, 1})
       .info("Server started")
-      .num("port:", 8080U)
+      .i("port:", 8080U)
       .write();
   // Output: [INFO] Server started port: 8080
 }
@@ -63,7 +63,7 @@ int main() {
 
   bilog::log({0, 0, 1})
       .info("Server started")
-      .num("port:", 8080U)
+      .i("port:", 8080U)
       .write();
 }
 ```
@@ -82,12 +82,13 @@ Then use the preprocessor and postprocessor to decode:
 
 ```cpp
 bilog::log({event_id, tag_id, tag_id, ...})
-    .info("message")           // level + message (trace/debug/info/warn/error/fatal)
-    .num("field:", 42U)        // numeric field (int, float, double)
-    .str("field:", str_var)    // std::string field
-    .cstr("field:", "literal") // string literal field
-    .boo("field:", true)       // boolean field
-    .write();                  // flush record
+    .info("message")         // level + message (trace/debug/info/warn/error/fatal)
+    .i("field:", 42)         // integer (signed or unsigned, any width)
+    .f("field:", 3.14)       // float or double
+    .b("field:", true)       // boolean
+    .s("field:", str_var)    // std::string
+    .cs("field:", "literal") // constant string (tag-table reference)
+    .write();                // finish record
 ```
 
 IDs in `log({...})` are managed by the preprocessor. Write `log({})` and run `preproc` to assign them automatically.
@@ -116,10 +117,12 @@ Schema format:
     "1": "port:"
   },
   "events": {
-    "0": [2, 4]
+    "0": ["i"]
   }
 }
 ```
+
+`tags` maps tag IDs to their string names. `events` maps event IDs to the ordered list of dynamic field types — one entry per chained field call. Type codes: `i` integer, `f` float/double, `b` bool, `s` string, `cs` constant string.
 
 ## Postprocessor
 
@@ -185,11 +188,19 @@ Defaults: `BinaryEncoder` + `FileSink`.
 
 ## Wire format
 
-Each log record is a sequence of byte pairs terminated by `\n`:
+Each log record is a sequence of byte pairs:
 
-`[event_id, level] [msg_tag, 0] [field_tag, value] ... [\n]`
+`[event_id, level] [msg_tag, 0] [field_tag, value] ...`
 
-Each pair has a 1-byte header: `[type_a:4][type_b:4]`, followed by payloads. Integer payloads use the narrowest encoding (1-8 bytes). Strings are length-prefixed (1 or 2 byte length).
+Each pair has a 1-byte header `[hdr_a:4][hdr_b:4]` where each 4-bit nibble is `[neg:1][width-1:3]`. Payloads are raw little-endian bytes of the declared `width` (1-8).
+
+- Unsigned integers and non-negative signed integers: `neg=0`, stored raw at the narrowest width.
+- Negative signed integers: zigzag-encoded, `neg=1`.
+- Floats: `width=4` raw IEEE-754. Doubles: `width=8`.
+- Strings: the pair header's `width` bytes encode the length; the string payload follows inline.
+- Bools: `width=1`, payload `0x00` or `0x01`.
+
+Records have no terminator — the schema's per-event field list tells the decoder how many dynamic pairs follow the fixed header.
 
 ## Testing
 
@@ -213,6 +224,7 @@ Compares bilog (binary encoder + file sink) against spdlog with the same message
 ------------------------------------------------------------
 Benchmark                  Time             CPU   Iterations
 ------------------------------------------------------------
-bilog_write_file        65.9 ns         65.1 ns     10586492
-spdlog_write_file        403 ns          395 ns      1767119
+bilog_write_file        70.2 ns         70.0 ns      9765080
+bilog_write_ringbuff    20.9 ns         20.9 ns      32371589
+spdlog_write_file        391 ns          386 ns      1822556
 ```

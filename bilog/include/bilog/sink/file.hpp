@@ -37,7 +37,7 @@ class FileSink {
 
   void write(Buffer<FileSink>* lb, const std::byte* data, std::size_t size) {
     if (lb->size() + size <= kBuffCap) [[likely]] {
-      lb->append(data, size);
+      lb->append_unsafe(data, size);
       return;
     }
     write_file(lb, data, size);
@@ -45,13 +45,17 @@ class FileSink {
 
   void write_byte(Buffer<FileSink>* lb, std::byte b) {
     if (lb->size() < kBuffCap) [[likely]] {
-      lb->append(b);
+      lb->append_unsafe(b);
       return;
     }
     write_file(lb, &b, 1);
   }
 
   void flush(Buffer<FileSink>* lb);
+
+  /// End-of-record commit: file sink batches across records, so this is a
+  /// no-op. The staging buffer flushes when it fills up or on destruction.
+  void commit(Buffer<FileSink>* /*lb*/) {}
 
  private:
   void write_file(Buffer<FileSink>* lb, const std::byte* data, std::size_t size);

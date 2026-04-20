@@ -48,23 +48,22 @@ class RingBuffSink {
 
   void write(Buffer<RingBuffSink>* lb, const std::byte* data, std::size_t size) {
     lb->append(data, size);
-    if (size > 0 && data[size - 1] == static_cast<std::byte>('\n')) {
-      flush(lb);
-    }
   }
 
   void write_byte(Buffer<RingBuffSink>* lb, std::byte b) {
     lb->append(b);
-    if (b == static_cast<std::byte>('\n')) {
-      flush(lb);
-    }
+  }
+
+  /// End-of-record commit: ring buffer publishes the staged record atomically
+  /// so readers and concurrent writers see a complete line.
+  void commit(Buffer<RingBuffSink>* lb) {
+    flush(lb);
   }
 
   void flush(Buffer<RingBuffSink>* lb) {
     if (lb->size() == 0 || ring_.empty()) {
       return;
     }
-
     auto len = lb->size();
     auto start = head_.fetch_add(len, std::memory_order_relaxed);
 
@@ -104,8 +103,6 @@ class RingBuffSink {
   void clear() {
     tail_.store(head_.load(std::memory_order_acquire), std::memory_order_release);
   }
-
-  static constexpr std::size_t capacity() { return kDefaultCap; }
 };
 
 }  // namespace bilog

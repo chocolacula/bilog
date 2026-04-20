@@ -26,7 +26,10 @@ class Event {
   const std::uint64_t* id_end_;
 
  public:
-  Event(Level min_level, EncoderT* encoder, Buffer<SinkT>* buff, SinkT* sink,
+  Event(Level min_level,
+        EncoderT* encoder,
+        Buffer<SinkT>* buff,
+        SinkT* sink,
         std::initializer_list<std::uint64_t> ids)
       : min_level_(min_level),
         encoder_(encoder),
@@ -100,8 +103,8 @@ class EventWriter {
  public:
   explicit EventWriter(Event<EncoderT, SinkT>* event) : event_(event) {}
 
-  template <typename T>
-  EventWriter num(const char* str, T val) {
+  template <std::integral T>
+  EventWriter i(const char* str, T val) {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
@@ -109,31 +112,43 @@ class EventWriter {
     return *this;
   }
 
-  EventWriter boo(const char* str, bool val) {
+  template <std::floating_point T>
+  EventWriter f(const char* str, T val) {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_, event_->sink_,  //
-                                  Tag(event_->next_id(), str),
-                                  static_cast<std::uint8_t>(val));
+    event_->encoder_->encode_pair(event_->buff_, event_->sink_, Tag(event_->next_id(), str), val);
     return *this;
   }
 
-  EventWriter str(const char* str, const std::string& val) {
+  EventWriter b(const char* str, bool val) {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_, event_->sink_,  //
+    event_->encoder_->encode_pair(event_->buff_,
+                                  event_->sink_,  //
                                   Tag(event_->next_id(), str),
                                   val);
     return *this;
   }
 
-  EventWriter cstr(const char* str, const char* val) {
+  EventWriter s(const char* str, const std::string& val) {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_, event_->sink_,  //
+    event_->encoder_->encode_pair(event_->buff_,
+                                  event_->sink_,  //
+                                  Tag(event_->next_id(), str),
+                                  val);
+    return *this;
+  }
+
+  EventWriter cs(const char* str, const char* val) {
+    if (event_ == nullptr) [[unlikely]] {
+      return *this;
+    }
+    event_->encoder_->encode_pair(event_->buff_,
+                                  event_->sink_,  //
                                   Tag(event_->next_id(), str),
                                   Tag(event_->next_id(), val));
     return *this;

@@ -52,6 +52,7 @@ TEST(StdoutSink, Writes) {
     sink.write_byte(&buf, static_cast<std::byte>('A'));
     sink.write_byte(&buf, static_cast<std::byte>('B'));
     sink.write_byte(&buf, static_cast<std::byte>('\n'));
+    sink.commit(&buf);
 
     auto output = capture.drain();
     EXPECT_EQ(output, "AB\n");
@@ -62,6 +63,7 @@ TEST(StdoutSink, Writes) {
 
     std::string_view msg = "hello world\n";
     sink.write(&buf, reinterpret_cast<const std::byte*>(msg.data()), msg.size());
+    sink.commit(&buf);
 
     auto output = capture.drain();
     EXPECT_EQ(output, "hello world\n");
@@ -74,24 +76,9 @@ TEST(StdoutSink, Writes) {
     sink.write(&buf, reinterpret_cast<const std::byte*>(part1.data()), part1.size());
     std::string_view part2 = "lo world\n";
     sink.write(&buf, reinterpret_cast<const std::byte*>(part2.data()), part2.size());
+    sink.commit(&buf);
 
     auto output = capture.drain();
     EXPECT_EQ(output, "[INFO] hello world\n");
   }
-}
-
-TEST(StdoutSink, FlushesOnNewline) {
-  bilog::StdoutSink sink;
-  buf_t buf(bilog::StdoutSink::kBuffCap);
-
-  StdoutCapture capture;
-  capture.start();
-
-  std::string_view msg = "no newline";
-  sink.write(&buf, reinterpret_cast<const std::byte*>(msg.data()), msg.size());
-  // Not flushed yet — no '\n'
-  sink.flush(&buf);  // explicit flush
-
-  auto output = capture.drain();
-  EXPECT_EQ(output, "no newline");
 }

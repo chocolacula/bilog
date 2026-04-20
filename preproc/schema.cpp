@@ -43,18 +43,18 @@ Schema load_schema(const std::filesystem::path& path) {
     }
   }
 
-  // load events: { "id": [pos, pos, ...], ... }
+  // load events: { "id": ["i", "f", ...], ... }
   if (doc.HasMember("events") && doc["events"].IsObject()) {
     for (const auto& entry : doc["events"].GetObject()) {
       if (!entry.value.IsArray()) continue;
       auto event_id = static_cast<std::uint64_t>(std::stoull(entry.name.GetString()));
-      std::vector<std::size_t> positions;
-      for (const auto& pos : entry.value.GetArray()) {
-        if (pos.IsUint64()) {
-          positions.push_back(static_cast<std::size_t>(pos.GetUint64()));
+      std::vector<std::string> fields;
+      for (const auto& item : entry.value.GetArray()) {
+        if (item.IsString()) {
+          fields.emplace_back(item.GetString());
         }
       }
-      schema.event_positions[event_id] = std::move(positions);
+      schema.event_fields[event_id] = std::move(fields);
     }
   }
 
@@ -79,15 +79,17 @@ std::string build_schema(const Schema& schema) {
 
   // events
   rapidjson::Value events_obj(rapidjson::kObjectType);
-  for (const auto& [event_id, positions] : schema.event_positions) {
-    rapidjson::Value pos_arr(rapidjson::kArrayType);
-    for (auto pos : positions) {
-      pos_arr.PushBack(static_cast<std::uint64_t>(pos), alloc);
+  for (const auto& [event_id, fields] : schema.event_fields) {
+    rapidjson::Value arr(rapidjson::kArrayType);
+    for (const auto& ft : fields) {
+      rapidjson::Value v;
+      v.SetString(ft.c_str(), static_cast<rapidjson::SizeType>(ft.size()), alloc);
+      arr.PushBack(v, alloc);
     }
     auto id_str = std::to_string(event_id);
     rapidjson::Value key;
     key.SetString(id_str.c_str(), static_cast<rapidjson::SizeType>(id_str.size()), alloc);
-    events_obj.AddMember(key, pos_arr, alloc);
+    events_obj.AddMember(key, arr, alloc);
   }
 
   doc.AddMember("tags", tags_obj, alloc);
