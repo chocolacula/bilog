@@ -18,7 +18,7 @@ void StdoutSink::flush(Buffer<StdoutSink>* lb) {
       if (sv.starts_with(kTags[i])) {
         (void)std::fwrite(kColors[i].data(), 1, kColors[i].size(), stdout);
         (void)std::fwrite(kTags[i].data(), 1, kTags[i].size(), stdout);
-        (void)std::fwrite(kReset.data(), 1, kReset.size(), stdout);
+        (void)std::fwrite(kResetColor.data(), 1, kResetColor.size(), stdout);
 
         auto rest = sv.substr(kTags[i].size());
         (void)std::fwrite(rest.data(), 1, rest.size(), stdout);

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -33,7 +34,7 @@ TEST(BinaryEncoder, Uint) {
     sink_t sink;
     buf_t buf(sink_t::kBuffCap);
     encoder.encode_pair(&buf, &sink, bilog::Tag(1, "msg"), val);
-    auto d = bilog::test::drain(&buf, sink);
+    auto d = bilog::test::drain(&buf, &sink);
 
     ASSERT_EQ(d.size(), 2U + payload.size());
     EXPECT_EQ(d[0], static_cast<std::byte>(lo));
@@ -72,7 +73,7 @@ TEST(BinaryEncoder, Int) {
     buf_t buf(sink_t::kBuffCap);
 
     encoder.encode_pair(&buf, &sink, bilog::Tag(1, "msg"), val);
-    auto d = bilog::test::drain(&buf, sink);
+    auto d = bilog::test::drain(&buf, &sink);
 
     ASSERT_EQ(d.size(), 2U + payload.size());
     EXPECT_EQ(d[0], static_cast<std::byte>(lo));
@@ -108,7 +109,7 @@ TEST(BinaryEncoder, Float) {
     buf_t buf(sink_t::kBuffCap);
 
     encoder.encode_pair(&buf, &sink, bilog::Tag(1, "msg"), val);
-    auto d = bilog::test::drain(&buf, sink);
+    auto d = bilog::test::drain(&buf, &sink);
 
     ASSERT_EQ(d.size(), 2U + sizeof(val));
     EXPECT_EQ(d[0], static_cast<std::byte>(lo));
@@ -129,7 +130,7 @@ TEST(BinaryEncoder, String) {
   buf_t buf(sink_t::kBuffCap);
   encoder.encode_pair(&buf, &sink, bilog::Tag(1, "msg"), std::string("hello"));
 
-  auto d = bilog::test::drain(&buf, sink);
+  auto d = bilog::test::drain(&buf, &sink);
   ASSERT_EQ(d.size(), 8U);
   EXPECT_EQ(d[0], static_cast<std::byte>(0x00));
   EXPECT_EQ(d[1], static_cast<std::byte>(1));
@@ -143,7 +144,7 @@ TEST(BinaryEncoder, Tag) {
   buf_t buf(sink_t::kBuffCap);
   encoder.encode_pair(&buf, &sink, bilog::Tag(1, "msg"), bilog::Tag(2, "b"));
 
-  auto d = bilog::test::drain(&buf, sink);
+  auto d = bilog::test::drain(&buf, &sink);
   ASSERT_EQ(d.size(), 3U);
   EXPECT_EQ(d[0], static_cast<std::byte>(0x00));
   EXPECT_EQ(d[1], static_cast<std::byte>(1));
@@ -161,18 +162,19 @@ TEST(BinaryFormatter, Types) {
     encoder.encode_pair(&buf, &sink, std::uint64_t{0}, bilog::Level::kInfo.to_byte());
     encoder.encode_pair(&buf, &sink, bilog::Tag(0, "msg,"), std::uint8_t{0});
     encoder.encode_pair(&buf, &sink, bilog::Tag(1, "val:"), val);
-    encoder.finish(&buf, &sink);
+    encoder.commit(&buf, &sink);
 
-    auto bin = bilog::test::drain(&buf, sink);
+    auto bin = bilog::test::drain(&buf, &sink);
 
     std::unordered_map<std::uint64_t, std::string> tags = {{0, "msg,"}, {1, "val:"}};
     std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {{0, {type}}};
 
-    bilog::BinaryFormatter fmt(bin.data(), bin.size());
+    std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+    bilog::BinaryFormatter fmt(&in);
     sink_t out;
     buf_t out_buf(sink_t::kBuffCap);
-    ASSERT_TRUE(fmt.format(out_buf, out, tags, events));
-    EXPECT_EQ(bilog::test::drain_str(&out_buf, out), expected);
+    ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+    EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), expected);
   };
 
   check(42, bilog::FieldType::Int, "[INFO] msg, val: 42\n");
@@ -197,28 +199,29 @@ TEST(BinaryFormatter, MultipleRecords) {
   encoder.encode_pair(&buf, &sink, std::uint64_t{0}, bilog::Level::kError.to_byte());
   encoder.encode_pair(&buf, &sink, bilog::Tag(10, "shutdown"), std::uint8_t{0});
   encoder.encode_pair(&buf, &sink, bilog::Tag(11, "code:"), std::uint8_t{7});
-  encoder.finish(&buf, &sink);
+  encoder.commit(&buf, &sink);
 
   encoder.encode_pair(&buf, &sink, std::uint64_t{1}, bilog::Level::kTrace.to_byte());
   encoder.encode_pair(&buf, &sink, bilog::Tag(20, "heartbeat"), std::uint8_t{0});
-  encoder.finish(&buf, &sink);
+  encoder.commit(&buf, &sink);
 
-  auto bin = bilog::test::drain(&buf, sink);
+  auto bin = bilog::test::drain(&buf, &sink);
 
   std::unordered_map<std::uint64_t, std::string> tags = {
       {10, "shutdown"}, {11, "code:"}, {20, "heartbeat"}};
   std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {
       {0, {bilog::FieldType::Int}}, {1, {}}};
 
-  bilog::BinaryFormatter fmt(bin.data(), bin.size());
+  std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+  bilog::BinaryFormatter fmt(&in);
   sink_t out;
   buf_t out_buf(sink_t::kBuffCap);
 
-  ASSERT_TRUE(fmt.format(out_buf, out, tags, events));
-  ASSERT_TRUE(fmt.format(out_buf, out, tags, events));
-  EXPECT_FALSE(fmt.has_data());
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  EXPECT_FALSE(fmt.format(&out_buf, &out, tags, events));
 
-  EXPECT_EQ(bilog::test::drain_str(&out_buf, out), "[ERROR] shutdown code: 7\n[TRACE] heartbeat\n");
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[ERROR] shutdown code: 7\n[TRACE] heartbeat\n");
 }
 
 TEST(BinaryFormatter, NoSchema) {
@@ -228,18 +231,19 @@ TEST(BinaryFormatter, NoSchema) {
 
   encoder.encode_pair(&buf, &sink, std::uint64_t{5}, bilog::Level::kDebug.to_byte());
   encoder.encode_pair(&buf, &sink, bilog::Tag(99, "msg"), std::uint8_t{0});
-  encoder.finish(&buf, &sink);
+  encoder.commit(&buf, &sink);
 
-  auto bin = bilog::test::drain(&buf, sink);
+  auto bin = bilog::test::drain(&buf, &sink);
 
   std::unordered_map<std::uint64_t, std::string> tags;
   std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events;
 
-  bilog::BinaryFormatter fmt(bin.data(), bin.size());
+  std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+  bilog::BinaryFormatter fmt(&in);
   sink_t out;
   buf_t out_buf(sink_t::kBuffCap);
-  ASSERT_TRUE(fmt.format(out_buf, out, tags, events));
-  EXPECT_EQ(bilog::test::drain_str(&out_buf, out), "[DEBUG] 99\n");
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[DEBUG] 99\n");
 }
 
 // --- MinLevel tests ---

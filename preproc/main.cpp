@@ -77,8 +77,8 @@ int main(int argc, char** argv) {
     auto schema = preproc::load_schema(output_json);
 
     // assign IDs and rewrite sources
-    preproc::assign_ids(schema, analyses);
-    preproc::rewrite_sources(analyses);
+    preproc::assign_ids(&schema, &analyses);
+    preproc::rewrite_sources(&analyses);
 
     // save updated schema
     preproc::write_file(output_json, preproc::build_schema(schema));

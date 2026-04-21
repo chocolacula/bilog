@@ -108,7 +108,10 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_, event_->sink_, Tag(event_->next_id(), str), val);
+    event_->encoder_->encode_pair(event_->buff_,  //
+                                  event_->sink_,
+                                  Tag(event_->next_id(), str),
+                                  val);
     return *this;
   }
 
@@ -117,7 +120,10 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_, event_->sink_, Tag(event_->next_id(), str), val);
+    event_->encoder_->encode_pair(event_->buff_,  //
+                                  event_->sink_,
+                                  Tag(event_->next_id(), str),
+                                  val);
     return *this;
   }
 
@@ -125,8 +131,8 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_,
-                                  event_->sink_,  //
+    event_->encoder_->encode_pair(event_->buff_,  //
+                                  event_->sink_,
                                   Tag(event_->next_id(), str),
                                   val);
     return *this;
@@ -136,8 +142,8 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_,
-                                  event_->sink_,  //
+    event_->encoder_->encode_pair(event_->buff_,  //
+                                  event_->sink_,
                                   Tag(event_->next_id(), str),
                                   val);
     return *this;
@@ -147,8 +153,8 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_,
-                                  event_->sink_,  //
+    event_->encoder_->encode_pair(event_->buff_,  //
+                                  event_->sink_,
                                   Tag(event_->next_id(), str),
                                   Tag(event_->next_id(), val));
     return *this;
@@ -158,7 +164,7 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return;
     }
-    event_->encoder_->finish(event_->buff_, event_->sink_);
+    event_->encoder_->commit(event_->buff_, event_->sink_);
   }
 };
 

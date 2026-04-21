@@ -14,8 +14,12 @@ namespace {
 // (e.g., level starters like info/warn/error, or the synthetic cs_val
 // which shares a field with its preceding cs call).
 std::string method_field_type(const std::string& m) {
-  if (m == "i" || m == "b" || m == "f" || m == "s") return m;
-  if (m == "cs") return "cs";
+  if (m == "i" || m == "b" || m == "f" || m == "s") {
+    return m;
+  }
+  if (m == "cs") {
+    return "cs";
+  }
   return {};  // level methods, cs_val, write
 }
 
@@ -26,19 +30,19 @@ bool is_level_method(const std::string& m) {
 
 }  // namespace
 
-void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
+void assign_ids(Schema* schema, std::vector<FileAnalysis>* analyses) {
   std::set<std::uint64_t> used_events;
   std::set<std::uint64_t> used_tags;
   std::set<std::uint64_t> claimed_events;
 
-  for (const auto& [name, id] : schema.tag_ids) {
+  for (const auto& [name, id] : schema->tag_ids) {
     used_tags.insert(id);
   }
-  for (const auto& [id, fields] : schema.event_fields) {
+  for (const auto& [id, fields] : schema->event_fields) {
     used_events.insert(id);
   }
 
-  for (const auto& analysis : analyses) {
+  for (const auto& analysis : *analyses) {
     for (const auto& call : analysis.calls) {
       if (!call.existing_ids.empty()) {
         used_events.insert(call.existing_ids[0]);
@@ -67,24 +71,26 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
     return id;
   };
 
-  schema.event_fields.clear();
+  schema->event_fields.clear();
 
-  for (auto& analysis : analyses) {
+  for (auto& analysis : *analyses) {
     for (auto& call : analysis.calls) {
-      if (call.chain.empty()) continue;
+      if (call.chain.empty()) {
+        continue;
+      }
 
       std::vector<std::uint64_t> tag_ids;
       tag_ids.reserve(call.chain.size());
 
       for (const auto& chain_call : call.chain) {
         if (!chain_call.tag.empty()) {
-          auto it = schema.tag_ids.find(chain_call.tag);
-          if (it != schema.tag_ids.end()) {
+          auto it = schema->tag_ids.find(chain_call.tag);
+          if (it != schema->tag_ids.end()) {
             tag_ids.push_back(it->second);
           } else {
             auto id = alloc_tag();
-            schema.tag_ids[chain_call.tag] = id;
-            schema.tag_names[id] = chain_call.tag;
+            schema->tag_ids[chain_call.tag] = id;
+            schema->tag_names[id] = chain_call.tag;
             tag_ids.push_back(id);
           }
         } else {
@@ -113,13 +119,15 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
       std::vector<std::string> fields;
       fields.reserve(call.chain.size());
       for (const auto& chain_call : call.chain) {
-        if (is_level_method(chain_call.method)) continue;
+        if (is_level_method(chain_call.method)) {
+          continue;
+        }
         auto ft = method_field_type(chain_call.method);
         if (!ft.empty()) {
           fields.push_back(std::move(ft));
         }
       }
-      schema.event_fields[event_id] = std::move(fields);
+      schema->event_fields[event_id] = std::move(fields);
 
       call.existing_ids = std::move(new_ids);
     }
@@ -127,7 +135,7 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
 
   // Clean stale tags
   std::set<std::uint64_t> live_tags;
-  for (const auto& analysis : analyses) {
+  for (const auto& analysis : *analyses) {
     for (const auto& call : analysis.calls) {
       for (std::size_t i = 1; i < call.existing_ids.size(); ++i) {
         live_tags.insert(call.existing_ids[i]);
@@ -136,20 +144,20 @@ void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses) {
   }
 
   std::vector<std::string> dead_tag_names;
-  for (const auto& [name, id] : schema.tag_ids) {
+  for (const auto& [name, id] : schema->tag_ids) {
     if (live_tags.count(id) == 0) {
       dead_tag_names.push_back(name);
     }
   }
   for (const auto& name : dead_tag_names) {
-    auto id = schema.tag_ids[name];
-    schema.tag_ids.erase(name);
-    schema.tag_names.erase(id);
+    auto id = schema->tag_ids[name];
+    schema->tag_ids.erase(name);
+    schema->tag_names.erase(id);
   }
 }
 
-void rewrite_sources(std::vector<FileAnalysis>& analyses) {
-  for (auto& analysis : analyses) {
+void rewrite_sources(std::vector<FileAnalysis>* analyses) {
+  for (auto& analysis : *analyses) {
     if (analysis.calls.empty()) {
       continue;
     }
@@ -167,7 +175,9 @@ void rewrite_sources(std::vector<FileAnalysis>& analyses) {
 
       std::string id_list;
       for (std::size_t i = 0; i < call.existing_ids.size(); ++i) {
-        if (i > 0) id_list += ", ";
+        if (i > 0) {
+          id_list += ", ";
+        }
         id_list += std::to_string(call.existing_ids[i]);
       }
 

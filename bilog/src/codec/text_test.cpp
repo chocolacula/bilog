@@ -24,38 +24,38 @@ TEST(TextEncoder, Types) {
   {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2});
     event.info("startup").i("port:", std::uint32_t{8080}).write();
-    EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[INFO] startup port: 8080\n");
+    EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[INFO] startup port: 8080\n");
   }
   sink.clear();
   {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2});
     event.info("status").b("ok:", true).write();
-    EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[INFO] status ok: true\n");
+    EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[INFO] status ok: true\n");
   }
   sink.clear();
   {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2});
     event.warn("temp").f("celsius:", 73.5F).write();
-    EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[WARN] temp celsius: 73.5\n");
+    EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[WARN] temp celsius: 73.5\n");
   }
   sink.clear();
   {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2, 3});
     event.error("crash").i("code:", std::uint8_t{42}).i("pid:", std::uint32_t{12345}).write();
-    EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[ERROR] crash code: 42 pid: 12345\n");
+    EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[ERROR] crash code: 42 pid: 12345\n");
   }
   sink.clear();
   {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2, 3});
     event.info("download").cs("file:", "test.log").write();
-    EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[INFO] download file: test.log\n");
+    EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[INFO] download file: test.log\n");
   }
   sink.clear();
   {
     std::string value = "hello world";
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2});
     event.debug("msg").s("data:", value).write();
-    EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[DEBUG] msg data: hello world\n");
+    EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[DEBUG] msg data: hello world\n");
   }
 }
 
@@ -68,7 +68,7 @@ TEST(TextEncoder, AllLevels) {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1});
     level_fn(event).write();
 
-    auto output = bilog::test::drain_str(&buf, sink);
+    auto output = bilog::test::drain_str(&buf, &sink);
     EXPECT_TRUE(output.starts_with(expected_tag));
     sink.clear();
   };
@@ -93,5 +93,5 @@ TEST(TextEncoder, MultipleRecords) {
     event_t event(bilog::Level::kTrace, &encoder, &buf, &sink, {0, 1, 2});
     event.error("second").i("n:", 2).write();
   }
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "[INFO] first n: 1\n[ERROR] second n: 2\n");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "[INFO] first n: 1\n[ERROR] second n: 2\n");
 }

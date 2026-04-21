@@ -9,6 +9,14 @@
 
 namespace bilog {
 
+/// @brief Sink that writes log records to a file via `std::ofstream`.
+///
+/// Writes stage into the Logger's `bilog::Buffer` and transfer to the
+/// underlying `std::ofstream` when the staging buffer would overflow.
+///
+/// Multiple threads can share one FileSink safely, file I/O is thread safe.
+///
+/// @note A default-constructed FileSink has no file open, all writes are discarded.
 class FileSink {
   std::ofstream file_;
   std::mutex file_mutex_;
@@ -16,7 +24,6 @@ class FileSink {
  public:
   static constexpr std::size_t kBuffCap = 8U * 1024L;
 
-  /// Default constructed FileSink discard all writes
   FileSink() = default;
   ~FileSink() = default;
 
@@ -25,7 +32,7 @@ class FileSink {
   explicit FileSink(std::ofstream&& stream) : file_(std::move(stream)) {}
 
   FileSink(FileSink&& other) noexcept = delete;
-  FileSink& operator=(FileSink&& other) noexcept {  // does not flush
+  FileSink& operator=(FileSink&& other) noexcept {
     if (this != &other) {
       file_ = std::move(other.file_);
     }
@@ -53,8 +60,6 @@ class FileSink {
 
   void flush(Buffer<FileSink>* lb);
 
-  /// End-of-record commit: file sink batches across records, so this is a
-  /// no-op. The staging buffer flushes when it fills up or on destruction.
   void commit(Buffer<FileSink>* /*lb*/) {}
 
  private:

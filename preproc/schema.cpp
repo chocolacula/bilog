@@ -35,7 +35,9 @@ Schema load_schema(const std::filesystem::path& path) {
   // load tags: { "id": "string", ... }
   if (doc.HasMember("tags") && doc["tags"].IsObject()) {
     for (const auto& entry : doc["tags"].GetObject()) {
-      if (!entry.value.IsString()) continue;
+      if (!entry.value.IsString()) {
+        continue;
+      }
       auto id = static_cast<std::uint64_t>(std::stoull(entry.name.GetString()));
       std::string name = entry.value.GetString();
       schema.tag_ids[name] = id;
@@ -46,7 +48,9 @@ Schema load_schema(const std::filesystem::path& path) {
   // load events: { "id": ["i", "f", ...], ... }
   if (doc.HasMember("events") && doc["events"].IsObject()) {
     for (const auto& entry : doc["events"].GetObject()) {
-      if (!entry.value.IsArray()) continue;
+      if (!entry.value.IsArray()) {
+        continue;
+      }
       auto event_id = static_cast<std::uint64_t>(std::stoull(entry.name.GetString()));
       std::vector<std::string> fields;
       for (const auto& item : entry.value.GetArray()) {

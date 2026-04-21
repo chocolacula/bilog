@@ -9,19 +9,19 @@
 int main() {
   bilog::init(bilog::Level::kTrace, bilog::TextEncoder(), bilog::StdoutSink());
 
-  bilog::log({0, 0, 1, 2, 3})
+  bilog::log({})  //
       .info("File download succeeded,")
       .cs("filename:", "some_image.jpg")
       .i("size:", 42U)
       .write();
 
-  bilog::log({1, 4, 5, 6})
+  bilog::log({})  //
       .error("Service shutdown,")
       .b("unexpected:", true)
       .i("uptime:", 7458596)
       .write();
 
-  bilog::log({2, 7, 8})  //
+  bilog::log({})  //
       .warn("Temperature changed,")
       .f("celsius:", 43.5F)
       .write();

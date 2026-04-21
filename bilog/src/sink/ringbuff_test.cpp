@@ -22,7 +22,7 @@ TEST(RingBuffSink, WriteAndRead) {
   sink.flush(&buf);
 
   EXPECT_EQ(sink.available(), 5U);
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "hello");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "hello");
   EXPECT_EQ(sink.available(), 0U);
 }
 
@@ -33,7 +33,7 @@ TEST(RingBuffSink, WriteByte) {
   sink.write_byte(&buf, static_cast<std::byte>('B'));
   sink.flush(&buf);
 
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "AB");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "AB");
 }
 
 TEST(RingBuffSink, Clear) {
@@ -45,7 +45,7 @@ TEST(RingBuffSink, Clear) {
 
   sink.clear();
   EXPECT_EQ(sink.available(), 0U);
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "");
 }
 
 TEST(RingBuffSink, Overflow) {
@@ -56,7 +56,7 @@ TEST(RingBuffSink, Overflow) {
   sink.flush(&buf);
 
   EXPECT_EQ(sink.available(), 8U);
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "EFGHIJKL");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "EFGHIJKL");
 }
 
 TEST(RingBuffSink, ReadPartial) {
@@ -71,7 +71,7 @@ TEST(RingBuffSink, ReadPartial) {
   EXPECT_EQ(n, 5U);
   EXPECT_EQ(std::string(reinterpret_cast<char*>(out), n), "hello");
   EXPECT_EQ(sink.available(), 6U);
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), " world");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), " world");
 }
 
 TEST(RingBuffSink, WrapAround) {
@@ -87,7 +87,7 @@ TEST(RingBuffSink, WrapAround) {
   sink.write(&buf, reinterpret_cast<const std::byte*>(second.data()), second.size());
   sink.flush(&buf);
 
-  EXPECT_EQ(bilog::test::drain_str(&buf, sink), "BBBBBBBB");
+  EXPECT_EQ(bilog::test::drain_str(&buf, &sink), "BBBBBBBB");
 }
 
 // --- Multithreaded tests ---
@@ -116,7 +116,7 @@ TEST(RingBuffSink, MultithreadedWrites) {
   }
 
   buf_t buf(bilog::RingBuffSink::kBuffCap);
-  auto content = bilog::test::drain_str(&buf, sink);
+  auto content = bilog::test::drain_str(&buf, &sink);
   auto line_count = std::ranges::count(content, '\n');
   EXPECT_EQ(line_count, kThreads * kLinesPerThread);
 
@@ -154,14 +154,15 @@ TEST(RingBuffSink, NoInterleaving) {
   }
 
   buf_t buf(bilog::RingBuffSink::kBuffCap);
-  auto content = bilog::test::drain_str(&buf, sink);
+  auto content = bilog::test::drain_str(&buf, &sink);
 
   std::size_t pos = 0;
   int lines = 0;
   while (pos < content.size()) {
     auto nl = content.find('\n', pos);
-    if (nl == std::string::npos)
+    if (nl == std::string::npos) {
       break;
+    }
 
     auto line = content.substr(pos, nl - pos);
     ASSERT_EQ(line.size(), 64U) << "Line " << lines << " wrong length";
@@ -198,7 +199,7 @@ TEST(RingBuffSink, ThreadFlushOnExit) {
   }
 
   buf_t buf(bilog::RingBuffSink::kBuffCap);
-  auto content = bilog::test::drain_str(&buf, sink);
+  auto content = bilog::test::drain_str(&buf, &sink);
   for (int t = 0; t < kThreads; ++t) {
     auto expected = "thread" + std::to_string(t);
     EXPECT_NE(content.find(expected), std::string::npos)

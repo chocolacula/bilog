@@ -7,7 +7,6 @@
 #include "bilog/codec/binary.hpp"
 #include "bilog/sink/file.hpp"
 #include "schema.hpp"
-#include "util.hpp"
 
 namespace fs = std::filesystem;
 
@@ -31,14 +30,12 @@ int main(int argc, char** argv) {
 
     const auto schema = postproc::load_schema(schema_path);
 
-    const auto bin_data = postproc::read_binary_file(input_path);
-    if (bin_data.empty()) {
-      std::cout << "Empty log file.\n";
-      return 0;
+    std::ifstream input(input_path, std::ios::binary);
+    if (!input) {
+      throw std::runtime_error("Failed to open " + input_path.string());
     }
 
-    bilog::BinaryFormatter formatter(bin_data.data(), bin_data.size());
-
+    bilog::BinaryFormatter formatter(&input);
     bilog::Buffer<bilog::FileSink> buf(bilog::FileSink::kBuffCap);
 
     if (output_arg.getValue().empty()) {
@@ -46,10 +43,7 @@ int main(int argc, char** argv) {
       stdout_stream.basic_ios<char>::rdbuf(std::cout.rdbuf());
       bilog::FileSink stdout_sink(std::move(stdout_stream));
       std::size_t count = 0;
-      while (formatter.has_data()) {
-        if (!formatter.format(buf, stdout_sink, schema.tag_names, schema.event_fields)) {
-          break;
-        }
+      while (formatter.format(&buf, &stdout_sink, schema.tag_names, schema.event_fields)) {
         ++count;
       }
       stdout_sink.flush(&buf);
@@ -58,10 +52,7 @@ int main(int argc, char** argv) {
       const fs::path output_path = fs::absolute(output_arg.getValue());
       bilog::FileSink file_sink(output_path);
       std::size_t count = 0;
-      while (formatter.has_data()) {
-        if (!formatter.format(buf, file_sink, schema.tag_names, schema.event_fields)) {
-          break;
-        }
+      while (formatter.format(&buf, &file_sink, schema.tag_names, schema.event_fields)) {
         ++count;
       }
       file_sink.flush(&buf);
@@ -69,7 +60,6 @@ int main(int argc, char** argv) {
       std::cout << "Formatted " << count << " log entries.\n";
       std::cout << "Output: " << output_path << '\n';
     }
-
     return 0;
   } catch (const TCLAP::ArgException& ex) {
     std::cerr << ex.error() << " for argument " << ex.argId() << '\n';

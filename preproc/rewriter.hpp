@@ -7,7 +7,7 @@
 
 namespace preproc {
 
-void assign_ids(Schema& schema, std::vector<FileAnalysis>& analyses);
-void rewrite_sources(std::vector<FileAnalysis>& analyses);
+void assign_ids(Schema* schema, std::vector<FileAnalysis>* analyses);
+void rewrite_sources(std::vector<FileAnalysis>* analyses);
 
 }  // namespace preproc

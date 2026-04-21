@@ -12,12 +12,18 @@ std::vector<std::uint64_t> parse_id_list(std::string_view src, std::size_t start
   std::size_t cur = start;
   while (cur < end) {
     skip_ws(src, cur);
-    if (cur >= end) break;
+    if (cur >= end) {
+      break;
+    }
     auto val = parse_uint_literal(src, cur);
-    if (!val) break;
+    if (!val) {
+      break;
+    }
     ids.push_back(*val);
     skip_ws(src, cur);
-    if (cur < end && src[cur] == ',') ++cur;
+    if (cur < end && src[cur] == ',') {
+      ++cur;
+    }
   }
   return ids;
 }
@@ -28,7 +34,9 @@ std::vector<ChainCall> parse_chain_calls(std::string_view src, std::size_t& cur)
   skip_ws(src, cur);
 
   while (cur + 1 < src.size() && src[cur] == '/' && src[cur + 1] == '/') {
-    while (cur < src.size() && src[cur] != '\n') ++cur;
+    while (cur < src.size() && src[cur] != '\n') {
+      ++cur;
+    }
     skip_ws(src, cur);
   }
 
@@ -126,7 +134,9 @@ std::optional<LogCall> parse_log_call(std::string_view content, std::size_t call
     std::size_t peek = cur;
     skip_ws(content, peek);
     while (peek + 1 < content.size() && content[peek] == '/' && content[peek + 1] == '/') {
-      while (peek < content.size() && content[peek] != '\n') ++peek;
+      while (peek < content.size() && content[peek] != '\n') {
+        ++peek;
+      }
       skip_ws(content, peek);
     }
     if (peek < content.size() && content[peek] == '.') {
@@ -144,7 +154,9 @@ std::optional<LogCall> parse_log_call(std::string_view content, std::size_t call
     }
 
     auto calls = parse_chain_calls(content, cur);
-    if (calls.empty()) break;
+    if (calls.empty()) {
+      break;
+    }
     for (auto& c : calls) {
       call.chain.push_back(std::move(c));
     }

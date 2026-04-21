@@ -41,7 +41,7 @@ def compile(source, output):
     run(
         [
             # fmt: off
-            "clang++", "-std=c++23", "-stdlib=libc++",
+            "clang++", "-std=c++23",
             "-I", PROJECT_ROOT / "bilog" / "include",
             "-o", output,
             source, PROJECT_ROOT / "bilog" / "src" / "sink" / "file.cpp",

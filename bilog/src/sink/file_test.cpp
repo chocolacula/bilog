@@ -27,8 +27,8 @@ std::string read_file(const fs::path& path) {
   return content;
 }
 
-void write_str(buf_t& buf, bilog::FileSink& sink, std::string_view sv) {
-  sink.write(&buf, reinterpret_cast<const std::byte*>(sv.data()), sv.size());
+void write_str(buf_t* buf, bilog::FileSink* sink, std::string_view sv) {
+  sink->write(buf, reinterpret_cast<const std::byte*>(sv.data()), sv.size());
 }
 
 }  // namespace
@@ -44,7 +44,7 @@ TEST(FileSink, Write) {
     sink.write_byte(&buf, static_cast<std::byte>('C'));
     sink.write_byte(&buf, static_cast<std::byte>(' '));
 
-    write_str(buf, sink, "hello world");
+    write_str(&buf, &sink, "hello world");
     sink.flush(&buf);
   }
   EXPECT_EQ(read_file(path), "ABC hello world");
@@ -73,11 +73,11 @@ TEST(FileSink, MoveAssignment) {
   {
     bilog::FileSink sink(path1);
     buf_t buf(bilog::FileSink::kBuffCap);
-    write_str(buf, sink, "first");
+    write_str(&buf, &sink, "first");
 
     sink.flush(&buf);
     sink = bilog::FileSink(path2);
-    write_str(buf, sink, "second");
+    write_str(&buf, &sink, "second");
     sink.flush(&buf);
   }
   EXPECT_EQ(read_file(path1), "first");
@@ -90,11 +90,11 @@ TEST(FileSink, DefaultNoOp) {
   bilog::FileSink sink;
   buf_t buf(bilog::FileSink::kBuffCap);
 
-  write_str(buf, sink, "[INFO] ");
+  write_str(&buf, &sink, "[INFO] ");
   sink.write_byte(&buf, static_cast<std::byte>('1'));
 
   std::string full(4096, '1');
-  write_str(buf, sink, full);
+  write_str(&buf, &sink, full);
 }
 
 TEST(FileSink, MultithreadedWrites) {
@@ -170,7 +170,9 @@ TEST(FileSink, NoInterleaving) {
   int lines = 0;
   while (pos < content.size()) {
     auto nl = content.find('\n', pos);
-    if (nl == std::string::npos) break;
+    if (nl == std::string::npos) {
+      break;
+    }
 
     auto line = content.substr(pos, nl - pos);
     ASSERT_EQ(line.size(), 64U) << "Line " << lines << " wrong length";

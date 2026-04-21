@@ -11,8 +11,10 @@ namespace bilog {
 /// @brief Sink that writes to stdout with ANSI color support.
 ///
 /// Uses the Logger's thread-local Buffer for line staging.
-/// On '\n', scans for a level tag at the start, wraps it in ANSI
-/// color codes, and writes to stdout. On non-TTY, colors are suppressed.
+/// On @ref `flush()`, scans for a level tag at the start, wraps
+/// it in ANSI color codes, and writes to stdout.
+///
+/// @note On non-TTY, colors are suppressed.
 class StdoutSink {
   bool color_ = false;
 
@@ -24,7 +26,8 @@ class StdoutSink {
       "\033[31m",    // ERROR - red
       "\033[1;31m",  // FATAL - bold red
   };
-  static constexpr std::string_view kReset = "\033[0m";
+  static constexpr std::string_view kResetColor = "\033[0m";
+
   static constexpr std::string_view kTags[] = {
       "[TRACE]",
       "[DEBUG]",

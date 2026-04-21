@@ -7,8 +7,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <istream>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -28,76 +31,59 @@ namespace bilog {
 ///
 /// Dynamic strings still live in the same header: the "width" bytes encode
 /// the string length, followed by that many payload bytes. The decoder
-/// needs the schema to know a field is a string (same for float/bool).
+/// needs the schema to know a field type.
 ///
-/// A record is a sequence of pairs; its length is implicit from the schema
-/// (event_id -> N dynamic fields). No terminator byte.
+/// A record is a sequence of pairs, its length is implicit from the schema
+/// event_id: N dynamic fields.
 class BinaryEncoder {
  public:
   BinaryEncoder() = default;
 
   /// Encode a pair of fixed-size values.
-  template <typename SinkT, typename A, typename B>
-    requires(!std::convertible_to<A, std::string_view> && !std::convertible_to<B, std::string_view>)
-  void encode_pair(Buffer<SinkT>* lb, SinkT* sink, const A& a, const B& b) {
-    std::byte buf[17];
-    std::uint64_t ua = 0;
-    std::uint8_t wa = 0;
-    std::uint8_t na = 0;
-    prepare(a, ua, wa, na);
-
-    std::uint64_t ub = 0;
-    std::uint8_t wb = 0;
-    std::uint8_t nb = 0;
-    prepare(b, ub, wb, nb);
-
-    buf[0] = make_header(na, wa, nb, wb);
-    std::size_t pos = 1;
-    write_payload(buf, &pos, ua, wa);
-    write_payload(buf, &pos, ub, wb);
-    sink->write(lb, buf, pos);
+  template <typename SinkT, typename ValT>
+    requires(!std::convertible_to<ValT, std::string_view>)
+  void encode_pair(Buffer<SinkT>* lb, SinkT* sink, const Tag& tag, const ValT& val) {
+    encode_pair(lb, sink, tag.id(), val);
   }
 
-  /// Encode a pair where the second value is a string.
   template <typename SinkT, typename A, typename B>
-    requires(!std::convertible_to<A, std::string_view> && std::convertible_to<B, std::string_view>)
   void encode_pair(Buffer<SinkT>* lb, SinkT* sink, const A& a, const B& b) {
-    auto sv = std::string_view(b);
+    auto [ua, width_a, neg_a] = prepare(a);
+    auto [ub, width_b, neg_b] = prepare(b);
+
+    sink->write_byte(lb, make_header(neg_a, width_a, neg_b, width_b));
+    sink->write(lb, reinterpret_cast<const std::byte*>(&ua), width_a);
+    sink->write(lb, reinterpret_cast<const std::byte*>(&ub), width_b);
+  }
+
+  /// Encode a dynamic string, if it's to long and length > uint16_t::max it will be truncated.
+  template <typename SinkT, typename ValT>
+    requires(std::convertible_to<ValT, std::string_view>)
+  void encode_pair(Buffer<SinkT>* lb, SinkT* sink, const Tag& tag, const ValT& val) {
+    auto sv = std::string_view(val);
     auto len = std::min(sv.size(), static_cast<std::size_t>(0xFFFF));
 
-    std::uint64_t ua = 0;
-    std::uint8_t wa = 0;
-    std::uint8_t na = 0;
-    prepare(a, ua, wa, na);
+    auto [ua, wa, na] = prepare(tag);
 
     // String width = 1 if len fits in 1 byte, else 2.
     std::uint8_t wb = (len <= 0xFF) ? 1 : 2;
 
-    std::byte buf[12];
-    buf[0] = make_header(na, wa, 0, wb);
+    sink->write_byte(lb, make_header(na, wa, 0, wb));
+    sink->write(lb, reinterpret_cast<const std::byte*>(&ua), wa);
 
-    std::size_t pos = 1;
-    write_payload(buf, &pos, ua, wa);
-
-    if (wb == 1) {
-      buf[pos++] = static_cast<std::byte>(len);
-    } else {
-      auto len16 = static_cast<std::uint16_t>(len);
-      std::memcpy(buf + pos, &len16, 2);
-      pos += 2;
-    }
-    sink->write(lb, buf, pos);
+    auto len16 = static_cast<std::uint16_t>(len);
+    sink->write(lb, reinterpret_cast<const std::byte*>(&len16), wb);
     sink->write(lb, reinterpret_cast<const std::byte*>(sv.data()), len);
   }
 
   template <typename SinkT>
-  void finish(Buffer<SinkT>* lb, SinkT* sink) {
+  void commit(Buffer<SinkT>* lb, SinkT* sink) {
     sink->commit(lb);
   }
 
  private:
   /// Extract the encoded width (in bytes, 1..8) for an unsigned value.
-  static std::uint8_t width_for(std::uint64_t v) {
+  static std::uint8_t width(std::uint64_t v) {
     if (v == 0) {
       return 1;
     }
@@ -111,96 +97,64 @@ class BinaryEncoder {
     return static_cast<std::uint8_t>((neg << 3U) | w);
   }
 
-  static std::byte make_header(std::uint8_t na, std::uint8_t wa, std::uint8_t nb, std::uint8_t wb) {
-    auto hi = static_cast<std::uint8_t>(code(na, wa) << 4U);
-    auto lo = code(nb, wb);
+  static std::byte make_header(std::uint8_t neg_a,
+                               std::uint8_t width_a,
+                               std::uint8_t neg_b,
+                               std::uint8_t width_b) {
+    auto hi = static_cast<std::uint8_t>(code(neg_a, width_a) << 4U);
+    auto lo = code(neg_b, width_b);
     return static_cast<std::byte>(hi | lo);
-  }
-
-  static void write_payload(std::byte* buf, std::size_t* pos, std::uint64_t v, std::uint8_t width) {
-    std::memcpy(buf + *pos, &v, width);
-    *pos += width;
   }
 
   // --- prepare: convert a C++ value into (unsigned payload, width, neg) ---
 
-  static void prepare(const Tag& tag, std::uint64_t& u, std::uint8_t& w, std::uint8_t& n) {
-    u = tag.id();
-    w = width_for(u);
-    n = 0;
+  using Prepared = std::tuple<std::uint64_t, std::uint8_t, std::uint8_t>;
+
+  static Prepared prepare(const Tag& tag) {
+    auto u = tag.id();
+    return {u, width(u), 0};
   }
 
-  static void prepare(std::byte b, std::uint64_t& u, std::uint8_t& w, std::uint8_t& n) {
-    u = static_cast<std::uint8_t>(b);
-    w = width_for(u);
-    n = 0;
+  static Prepared prepare(std::byte b) {
+    auto u = static_cast<std::uint64_t>(static_cast<std::uint8_t>(b));
+    return {u, width(u), 0};
   }
 
   template <std::integral T>
-  static void prepare(T val, std::uint64_t& u, std::uint8_t& w, std::uint8_t& n) {
+  static Prepared prepare(T val) {
     if constexpr (std::is_signed_v<T>) {
       if (val < 0) {
         // Zigzag: (n << 1) ^ (n >> (bits-1))
         auto s = static_cast<std::int64_t>(val);
-        u = (static_cast<std::uint64_t>(s) << 1U) ^ static_cast<std::uint64_t>(s >> 63);
-        w = width_for(u);
-        n = 1;
-        return;
+        auto u = (static_cast<std::uint64_t>(s) << 1U) ^ static_cast<std::uint64_t>(s >> 63);
+        return {u, width(u), 1};
       }
-      u = static_cast<std::uint64_t>(val);
-    } else {
-      u = static_cast<std::uint64_t>(val);
     }
-    w = width_for(u);
-    n = 0;
+    auto u = static_cast<std::uint64_t>(val);
+    return {u, width(u), 0};
   }
 
   template <std::floating_point T>
-  static void prepare(T val, std::uint64_t& u, std::uint8_t& w, std::uint8_t& n) {
-    u = 0;
+  static Prepared prepare(T val) {
+    std::uint64_t u = 0;
     if constexpr (std::same_as<T, float>) {
       std::memcpy(&u, &val, sizeof(float));
-      w = 4;
+      return {u, 4, 0};
     } else {
       std::memcpy(&u, &val, sizeof(double));
-      w = 8;
+      return {u, 8, 0};
     }
-    n = 0;
   }
 };
 
 /// Semantic type tag for a dynamic field, stored in the schema.
 enum class FieldType : std::uint8_t {
-  Int,     // "i" — signed/unsigned integer
-  Float,   // "f" — float (width 4) or double (width 8)
-  Bool,    // "b" — 1 byte, 0/1
-  String,  // "s" — length-prefixed bytes
-  CStr,    // "cs" — tag ID, rendered via tag_names
+  Int,    // signed/unsigned integer
+  Float,  // float (width 4) or double (width 8)
+  Bool,
+  String,
+  CStr,
 };
-
-inline bool parse_field_type(std::string_view s, FieldType& out) {
-  if (s == "i") {
-    out = FieldType::Int;
-    return true;
-  }
-  if (s == "f") {
-    out = FieldType::Float;
-    return true;
-  }
-  if (s == "b") {
-    out = FieldType::Bool;
-    return true;
-  }
-  if (s == "s") {
-    out = FieldType::String;
-    return true;
-  }
-  if (s == "cs") {
-    out = FieldType::CStr;
-    return true;
-  }
-  return false;
-}
 
 /// @brief Reads binary log data and writes formatted text.
 ///
@@ -211,42 +165,32 @@ inline bool parse_field_type(std::string_view s, FieldType& out) {
 ///   [field_name_tag, value]
 /// where value's type comes from the schema's event field-type list.
 class BinaryFormatter {
-  const std::byte* data_ = nullptr;
-  std::size_t size_ = 0;
-  std::size_t pos_ = 0;
+  std::istream* in_;
 
  public:
-  BinaryFormatter() = default;
-  BinaryFormatter(const std::byte* data, std::size_t size) : data_(data), size_(size) {}
+  explicit BinaryFormatter(std::istream* in) : in_(in) {}
 
-  void reset(const std::byte* data, std::size_t size) {
-    data_ = data;
-    size_ = size;
-    pos_ = 0;
-  }
-
-  [[nodiscard]] bool has_data() const {
-    return pos_ < size_;
-  }
-
-  /// Format one record.
+  /// Format one record. Returns true if a record was written, false at clean
+  /// EOF or on a mid-record read error.
   /// tag_names: tag_id -> string (e.g. 101 -> "startup")
   /// event_fields: event_id -> list of FieldType for the dynamic fields
   template <typename SinkT>
-  bool format(Buffer<SinkT>& lb,
-              SinkT& sink,
+  bool format(Buffer<SinkT>* lb,
+              SinkT* sink,
               const std::unordered_map<std::uint64_t, std::string>& tag_names,
               const std::unordered_map<std::uint64_t, std::vector<FieldType>>& event_fields) {
-    if (pos_ >= size_) {
+    // peek() sets eofbit if the stream is at EOF; use it to distinguish clean
+    // end-of-stream from a read failure inside a record.
+    if (in_->peek() == std::char_traits<char>::eof()) {
       return false;
     }
 
     // Pair 0: event_id (unsigned) + level (1 byte)
     DecodedValue ev;
     DecodedValue lv;
-    if (!read_pair(ev, lv))
+    if (!read_pair(&ev, &lv)) {
       return false;
-
+    }
     auto event_id = ev.u64;
     auto level_byte = static_cast<std::byte>(lv.u64);
 
@@ -254,13 +198,13 @@ class BinaryFormatter {
     DecodedValue mt;
     DecodedValue ph;
     (void)ph;
-    if (!read_pair(mt, ph))
+    if (!read_pair(&mt, &ph)) {
       return false;
-
+    }
     auto msg_tag_id = mt.u64;
 
     // Write: [LEVEL]
-    sink.write_byte(&lb, static_cast<std::byte>('['));
+    sink->write_byte(lb, static_cast<std::byte>('['));
     auto lvl = Level::from_byte(level_byte);
     if (lvl) {
       auto name = lvl->to_str();
@@ -268,11 +212,11 @@ class BinaryFormatter {
         write_str(lb, sink, *name);
       }
     }
-    sink.write_byte(&lb, static_cast<std::byte>(']'));
-    sink.write_byte(&lb, static_cast<std::byte>(' '));
+    sink->write_byte(lb, static_cast<std::byte>(']'));
+    sink->write_byte(lb, static_cast<std::byte>(' '));
 
     // Message tag name
-    write_tag_name(lb, sink, msg_tag_id, tag_names);
+    write_tag(lb, sink, msg_tag_id, tag_names);
 
     // Dynamic fields, driven by schema. Each field is a pair [name_tag, value].
     // For strings, the pair header still defines the widths of name_tag and
@@ -282,28 +226,26 @@ class BinaryFormatter {
       for (auto ft : ev_it->second) {
         DecodedValue name_tag;
         DecodedValue value;
-        if (!read_pair(name_tag, value))
+        if (!read_pair(&name_tag, &value)) {
           return false;
-
-        sink.write_byte(&lb, static_cast<std::byte>(' '));
-        write_tag_name(lb, sink, name_tag.u64, tag_names);
-        sink.write_byte(&lb, static_cast<std::byte>(' '));
+        }
+        sink->write_byte(lb, static_cast<std::byte>(' '));
+        write_tag(lb, sink, name_tag.u64, tag_names);
+        sink->write_byte(lb, static_cast<std::byte>(' '));
 
         if (ft == FieldType::String) {
-          // value.u64 is the length (from the pair); payload follows inline.
-          auto len = value.u64;
-          if (pos_ + len > size_)
+          // value.u64 holds the string length; stream that many bytes through
+          // a stack scratch buffer into the sink.
+          if (!write_string_from_stream(lb, sink, value.u64)) {
             return false;
-          std::string_view sv(reinterpret_cast<const char*>(data_ + pos_), len);
-          pos_ += len;
-          write_str(lb, sink, sv);
+          }
         } else {
           format_scalar(lb, sink, ft, value, tag_names);
         }
       }
     }
 
-    sink.write_byte(&lb, static_cast<std::byte>('\n'));
+    sink->write_byte(lb, static_cast<std::byte>('\n'));
     return true;
   }
 
@@ -315,32 +257,47 @@ class BinaryFormatter {
   };
 
   /// Read one pair (two fixed-width values sharing a header byte).
-  bool read_pair(DecodedValue& a, DecodedValue& b) {
-    if (pos_ >= size_)
+  bool read_pair(DecodedValue* a, DecodedValue* b) {
+    char hdr_ch = 0;
+    if (!in_->read(&hdr_ch, 1)) {
       return false;
-    auto hdr = static_cast<std::uint8_t>(data_[pos_++]);
-    decode_nibble((hdr >> 4U) & 0xFU, a.neg, a.width);
-    decode_nibble(hdr & 0xFU, b.neg, b.width);
+    }
+    auto hdr = static_cast<std::uint8_t>(hdr_ch);
+    decode_nibble((hdr >> 4U) & 0xFU, &a->neg, &a->width);
+    decode_nibble(hdr & 0xFU, &b->neg, &b->width);
     return read_fixed_payload(a) && read_fixed_payload(b);
   }
 
-  bool read_fixed_payload(DecodedValue& out) {
-    if (pos_ + out.width > size_)
-      return false;
-    out.u64 = 0;
-    std::memcpy(&out.u64, data_ + pos_, out.width);
-    pos_ += out.width;
+  bool read_fixed_payload(DecodedValue* out) {
+    out->u64 = 0;
+    return static_cast<bool>(in_->read(reinterpret_cast<char*>(&out->u64), out->width));
+  }
+
+  /// Stream `len` bytes from the input into the sink via a stack scratch
+  /// buffer. Avoids allocating for arbitrarily large strings.
+  template <typename SinkT>
+  bool write_string_from_stream(Buffer<SinkT>* lb, SinkT* sink, std::uint64_t len) {
+    constexpr std::size_t kChunk = 256;
+    char scratch[kChunk];
+    while (len > 0) {
+      auto n = static_cast<std::size_t>(std::min<std::uint64_t>(len, kChunk));
+      if (!in_->read(scratch, static_cast<std::streamsize>(n))) {
+        return false;
+      }
+      sink->write(lb, reinterpret_cast<const std::byte*>(scratch), n);
+      len -= n;
+    }
     return true;
   }
 
-  static void decode_nibble(std::uint8_t nib, std::uint8_t& neg, std::uint8_t& width) {
-    neg = (nib >> 3U) & 0x1U;
-    width = static_cast<std::uint8_t>((nib & 0x7U) + 1U);
+  static void decode_nibble(std::uint8_t nib, std::uint8_t* neg, std::uint8_t* width) {
+    *neg = (nib >> 3U) & 0x1U;
+    *width = static_cast<std::uint8_t>((nib & 0x7U) + 1U);
   }
 
   template <typename SinkT>
-  static void format_scalar(Buffer<SinkT>& lb,
-                            SinkT& sink,
+  static void format_scalar(Buffer<SinkT>* lb,
+                            SinkT* sink,
                             FieldType ft,
                             const DecodedValue& v,
                             const std::unordered_map<std::uint64_t, std::string>& tag_names) {
@@ -370,7 +327,7 @@ class BinaryFormatter {
         write_str(lb, sink, v.u64 != 0U ? std::string_view("true") : std::string_view("false"));
         return;
       case FieldType::CStr:
-        write_tag_name(lb, sink, v.u64, tag_names);
+        write_tag(lb, sink, v.u64, tag_names);
         return;
       case FieldType::String:
         return;  // handled by caller before this is called
@@ -378,12 +335,12 @@ class BinaryFormatter {
   }
 
   template <typename SinkT>
-  static void write_tag_name(Buffer<SinkT>& lb,
-                             SinkT& sink,
-                             std::uint64_t id,
-                             const std::unordered_map<std::uint64_t, std::string>& tag_names) {
-    auto it = tag_names.find(id);
-    if (it != tag_names.end()) {
+  static void write_tag(Buffer<SinkT>* lb,
+                        SinkT* sink,
+                        std::uint64_t id,
+                        const std::unordered_map<std::uint64_t, std::string>& tags) {
+    auto it = tags.find(id);
+    if (it != tags.end()) {
       write_str(lb, sink, it->second);
     } else {
       write_uint(lb, sink, id);
@@ -391,12 +348,12 @@ class BinaryFormatter {
   }
 
   template <typename SinkT>
-  static void write_str(Buffer<SinkT>& lb, SinkT& sink, std::string_view s) {
-    sink.write(&lb, reinterpret_cast<const std::byte*>(s.data()), s.size());
+  static void write_str(Buffer<SinkT>* lb, SinkT* sink, std::string_view s) {
+    sink->write(lb, reinterpret_cast<const std::byte*>(s.data()), s.size());
   }
 
   template <typename SinkT>
-  static void write_uint(Buffer<SinkT>& lb, SinkT& sink, std::uint64_t val) {
+  static void write_uint(Buffer<SinkT>* lb, SinkT* sink, std::uint64_t val) {
     char buf[20];
     auto* end = buf + sizeof(buf);
     auto* p = end;
@@ -408,13 +365,13 @@ class BinaryFormatter {
         val /= 10;
       }
     }
-    sink.write(&lb, reinterpret_cast<const std::byte*>(p), static_cast<std::size_t>(end - p));
+    sink->write(lb, reinterpret_cast<const std::byte*>(p), static_cast<std::size_t>(end - p));
   }
 
   template <typename SinkT>
-  static void write_int(Buffer<SinkT>& lb, SinkT& sink, std::int64_t val) {
+  static void write_int(Buffer<SinkT>* lb, SinkT* sink, std::int64_t val) {
     if (val < 0) {
-      sink.write_byte(&lb, static_cast<std::byte>('-'));
+      sink->write_byte(lb, static_cast<std::byte>('-'));
       // Careful with INT64_MIN — negate via unsigned.
       auto abs_val = static_cast<std::uint64_t>(-(val + 1)) + 1U;
       write_uint(lb, sink, abs_val);
@@ -424,11 +381,11 @@ class BinaryFormatter {
   }
 
   template <typename SinkT>
-  static void write_float(Buffer<SinkT>& lb, SinkT& sink, double val) {
+  static void write_float(Buffer<SinkT>* lb, SinkT* sink, double val) {
     char buf[32];
     auto len = std::snprintf(buf, sizeof(buf), "%g", val);
     if (len > 0) {
-      sink.write(&lb, reinterpret_cast<const std::byte*>(buf), static_cast<std::size_t>(len));
+      sink->write(lb, reinterpret_cast<const std::byte*>(buf), static_cast<std::size_t>(len));
     }
   }
 };

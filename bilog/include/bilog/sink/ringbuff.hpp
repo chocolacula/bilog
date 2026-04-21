@@ -13,9 +13,8 @@ namespace bilog {
 /// @brief Lock-free multi-producer ring buffer sink.
 ///
 /// Uses the Logger's thread-local Buffer for line staging.
-/// On flush(), the entire line is committed atomically to the shared
-/// ring buffer via a single fetch_add. This prevents interleaving
-/// of bytes from different threads.
+/// On @ref `flush()`, the entire line is committed atomically to the shared
+/// ring buffer. This prevents interleaving of bytes from different threads.
 class RingBuffSink {
   static constexpr std::size_t kDefaultCap = 64UL * 1024UL;
 
@@ -54,8 +53,6 @@ class RingBuffSink {
     lb->append(b);
   }
 
-  /// End-of-record commit: ring buffer publishes the staged record atomically
-  /// so readers and concurrent writers see a complete line.
   void commit(Buffer<RingBuffSink>* lb) {
     flush(lb);
   }
