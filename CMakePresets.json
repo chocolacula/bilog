@@ -11,8 +11,7 @@
       "toolchainFile": "build/Debug/generators/conan_toolchain.cmake",
       "binaryDir": "build/Debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_FLAGS_INIT": "-fprofile-instr-generate -fcoverage-mapping"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {

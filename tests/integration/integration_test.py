@@ -9,13 +9,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "tests" / "data"
 
-# Each entry: (name, source_file, expected_log, bin_filename)
-# bin_filename must match what the source writes via ::open()
-PIPELINE_CASES = [
-    ("empty_id", "empty_id.cpp", "empty_id.log", "test_output.bin"),
-    ("valid_id", "valid_id.cpp", "valid_id.log", "test_output.bin"),
-]
-
 
 def find_build_dir():
     for candidate in ["build/Debug", "build/Release"]:
@@ -74,42 +67,55 @@ class TestIntegration(unittest.TestCase):
 
     def test_full_pipeline(self):
         """preproc -> compile -> run -> postproc -> compare expected output"""
-        for name, source_name, expected_name, bin_name in PIPELINE_CASES:
-            with self.subTest(name):
-                workspace = self.workspace / name
-                workspace.mkdir()
+        cases = [
+            ("empty_id", "empty_id.cpp"),
+            ("valid_id", "valid_id.cpp"),
+        ]
+        for name, source_name in cases:
+            workspace = self.workspace / name
+            workspace.mkdir()
 
-                source_file = DATA_DIR / source_name
-                expected_file = DATA_DIR / expected_name
+            source_file = DATA_DIR / source_name
+            expected_file = DATA_DIR / (name + ".log")
 
-                test_source = workspace / "app.cpp"
-                shutil.copy2(source_file, test_source)
+            test_source = workspace / "app.cpp"
+            shutil.copy2(source_file, test_source)
 
-                schema_file = workspace / "schema.json"
-                bin_file = workspace / bin_name
-                log_file = workspace / "output.log"
-                test_binary = workspace / "app"
+            schema_file = workspace / "schema.json"
+            bin_file = workspace / (name + ".bin")
+            log_file = workspace / "output.log"
+            test_binary = workspace / "app"
 
-                # Preprocess
-                run([self.preproc, "-i", test_source, "-o", schema_file])
-                self.assertTrue(schema_file.exists(), "Schema not created")
+            # Preprocess
+            run([self.preproc, "-i", test_source, "-o", schema_file])
+            self.assertTrue(schema_file.exists(), "Schema not created")
 
-                # Compile
-                compile(test_source, test_binary)
+            # Compile
+            compile(test_source, test_binary)
 
-                # Run
-                run([test_binary], cwd=workspace)
-                self.assertTrue(bin_file.exists(), "Binary log not created")
-                self.assertGreater(bin_file.stat().st_size, 0, "Binary log is empty")
+            # Run
+            run([test_binary], cwd=workspace)
+            self.assertTrue(bin_file.exists(), "Binary log not created")
+            self.assertGreater(bin_file.stat().st_size, 0, "Binary log is empty")
 
-                # Postprocess
-                run([self.postproc, "-s", schema_file, "-i", bin_file, "-o", log_file])
-                self.assertTrue(log_file.exists(), "Output log not created")
+            # Postprocess
+            run([self.postproc, "-s", schema_file, "-i", bin_file, "-o", log_file])
+            self.assertTrue(log_file.exists(), "Output log not created")
 
-                # Compare
-                actual = log_file.read_text()
-                expected = expected_file.read_text()
-                self.assertEqual(actual, expected)
+            # Compare
+            actual = log_file.read_text()
+            expected = expected_file.read_text()
+            if actual != expected:
+                # Dump diagnostic state so CI failures are debuggable.
+                print(f"\n--- schema.json ({name}) ---", flush=True)
+                print(schema_file.read_text(), flush=True)
+                print(f"--- rewritten {source_name} ---", flush=True)
+                print(test_source.read_text(), flush=True)
+                print(f"--- bin hex ({bin_file.stat().st_size} bytes) ---", flush=True)
+                print(bin_file.read_bytes().hex(), flush=True)
+                print(f"--- actual output ({name}) ---", flush=True)
+                print(actual, flush=True)
+            self.assertEqual(actual, expected)
 
     def test_preproc_idempotent(self):
         """Running preproc twice produces the same source and schema"""

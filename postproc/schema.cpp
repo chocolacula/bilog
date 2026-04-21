@@ -61,10 +61,7 @@ Schema load_schema(const std::filesystem::path& path) {
         if (!item.IsString()) {
           continue;
         }
-        bilog::FieldType ft = bilog::FieldType::Int;
-        if (from_str(item.GetString()) == ft) {
-          fields.push_back(ft);
-        }
+        fields.push_back(from_str(item.GetString()));
       }
       schema.event_fields[event_id] = std::move(fields);
     }

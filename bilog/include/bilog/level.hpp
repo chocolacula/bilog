@@ -10,18 +10,19 @@ class Level {
   std::byte val_;
   constexpr explicit Level(std::byte val) noexcept : val_(val) {}
 
+  static constexpr std::string_view levels[] = {"TRACE",  //
+                                                "DEBUG",
+                                                "INFO",
+                                                "WARN",
+                                                "ERROR",
+                                                "FATAL"};
+
  public:
   constexpr std::optional<std::string_view> to_str() const {
-    static const std::string_view levels[] = {"TRACE",  //
-                                              "DEBUG",
-                                              "INFO",
-                                              "WARN",
-                                              "ERROR",
-                                              "FATAL"};
-
     return levels  // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
         [static_cast<size_t>(val_)];
   }
+
   constexpr std::byte to_byte() const {
     return val_;
   }

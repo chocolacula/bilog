@@ -1,0 +1,53 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Conan
+        uses: conan-io/setup-conan@v1
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-${{ runner.os }}-${{ hashFiles('conanfile.txt') }}
+          restore-keys: |
+            conan-${{ runner.os }}-
+
+      - name: Build
+        run: |
+          conan install . -s build_type=Debug --build=missing
+          cmake --preset Debug -DCMAKE_CXX_FLAGS="--coverage"
+          cmake --build --preset Debug
+
+      - name: Unit tests
+        run: ctest --preset Debug --output-on-failure
+
+      - name: Integration tests
+        run: python3 -m unittest discover -s tests/integration -t . -p '*_test.py' -v
+
+      - name: Generate coverage
+        run: |
+          pip install gcovr
+          gcovr --root . -o coverage.xml \
+            --filter 'bilog/' --filter 'preproc/' --filter 'postproc/' \
+            --gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
+            --xml-pretty \
+            --print-summary
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml

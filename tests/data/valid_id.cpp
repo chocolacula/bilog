@@ -1,7 +1,7 @@
 #include "bilog/bilog.hpp"
 
 int main() {
-  bilog::init(bilog::Level::kTrace, bilog::BinaryEncoder(), bilog::FileSink("test_output.bin"));
+  bilog::init(bilog::Level::kTrace, bilog::BinaryEncoder(), bilog::FileSink("valid_id.bin"));
 
   std::string date = "today";
   bilog::log({0, 8, 9, 10, 11, 12})
