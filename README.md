@@ -2,7 +2,9 @@
   <img src="readme/logo.jpg" alt="logo" />
 </p>
 <p align="center">
-  <a href="<https://github.com/chocolacula/bilog/actions/workflows/cmake.yml"><img src="https://github.com/chocolacula/bilog/actions/workflows/cmake.yml/badge.svg"alt="Test" /></a>
+  <a href="<https://github.com/chocolacula/bilog/actions/workflows/test.yml"><img src="https://github.com/chocolacula/bilog/actions/workflows/test.yml/badge.svg" alt="Test"/></a>
+  <a href="https://codecov.io/gh/chocolacula/bilog"><img src="https://codecov.io/gh/chocolacula/bilog/graph/badge.svg?token=MR5VSLJTPD" alt="Coverage"/>
+ </a>
 </p>
 
 High-performance logging library writing a log message in tens of nanoseconds.
