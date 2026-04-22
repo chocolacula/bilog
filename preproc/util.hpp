@@ -174,21 +174,11 @@ inline std::vector<fs::path> collect_sources(const fs::path& root) {
     return files;
   }
 
-  fs::recursive_directory_iterator iter(root);
-  fs::recursive_directory_iterator end;
-  while (iter != end) {
-    const auto& entry = *iter;
-    if (entry.is_directory()) {
-      iter.disable_recursion_pending();
-      ++iter;
-      continue;
-    }
+  for (const auto& entry : fs::recursive_directory_iterator(root)) {
     if (entry.is_regular_file() && is_cpp_source(entry.path())) {
       files.push_back(fs::absolute(entry.path()));
     }
-    ++iter;
   }
-
   return files;
 }
 

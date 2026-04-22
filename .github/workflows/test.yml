@@ -41,11 +41,18 @@ jobs:
       - name: Generate coverage
         run: |
           pip install gcovr
-          gcovr --root . -o coverage.xml \
-            --filter 'bilog/' --filter 'preproc/' --filter 'postproc/' \
+          gcovr --root . \
+            --filter 'bilog/include/' \
+            --filter 'bilog/src/' \
+            --filter 'preproc/' \
+            --filter 'postproc/' \
+            --exclude '_test\.cpp$' \
+            --exclude '^tests/' \
+            --exclude '^benches/' \
+            --exclude '^examples/' \
             --gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
-            --xml-pretty \
-            --print-summary
+            --xml-pretty --print-summary \
+            -o coverage.xml
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4

@@ -1,3 +1,5 @@
+project(bilog VERSION ${PROJECT_VERSION})
+
 add_library(${PROJECT_NAME}
     src/sink/file.cpp
     src/sink/stdout.cpp

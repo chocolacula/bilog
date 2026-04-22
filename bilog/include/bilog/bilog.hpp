@@ -69,7 +69,7 @@ inline void init(Level min_level,
   logger.sink_ = std::move(sink);
 }
 
-Event<CurrentLogger::encoder_t, CurrentLogger::sink_t> log(
+inline Event<CurrentLogger::encoder_t, CurrentLogger::sink_t> log(
     std::initializer_list<std::uint64_t> dont_edit) {
   return CurrentLogger::instance().log(dont_edit);
 }

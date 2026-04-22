@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(bilog VERSION 0.1.1)
+project(bilog_workspace VERSION 0.1.1)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

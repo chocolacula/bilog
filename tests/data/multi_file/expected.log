@@ -1,0 +1,4 @@
+[INFO] Server started port: 8080 node: stage1
+[WARN] Config reloaded node: stage1
+[WARN] High memory usage node: stage1 percent: 85.6
+[ERROR] Connection failed retries: 3

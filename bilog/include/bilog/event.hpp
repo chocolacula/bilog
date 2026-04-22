@@ -153,10 +153,10 @@ class EventWriter {
     if (event_ == nullptr) [[unlikely]] {
       return *this;
     }
-    event_->encoder_->encode_pair(event_->buff_,  //
-                                  event_->sink_,
-                                  Tag(event_->next_id(), str),
-                                  Tag(event_->next_id(), val));
+    // sequence these two calls explicitly
+    Tag str_tag(event_->next_id(), str);
+    Tag val_tag(event_->next_id(), val);
+    event_->encoder_->encode_pair(event_->buff_, event_->sink_, str_tag, val_tag);
     return *this;
   }
 

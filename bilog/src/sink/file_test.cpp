@@ -97,6 +97,68 @@ TEST(FileSink, DefaultNoOp) {
   write_str(&buf, &sink, full);
 }
 
+// Covers write_file's "size > kBuffCap" branch: a single write larger than
+// the staging buffer bypasses staging and goes straight to the file.
+TEST(FileSink, WriteLarge) {
+  const std::size_t big = bilog::FileSink::kBuffCap + 1;  // clearly oversized
+  std::string payload(big, 'X');
+
+  auto path = temp_filepath("bilog_filesink_large.bin");
+  {
+    bilog::FileSink sink(path);
+    buf_t buf(bilog::FileSink::kBuffCap);
+    buf.set_sink(&sink);
+
+    // has something to emit before the big write.
+    write_str(&buf, &sink, "prefix:");
+    sink.write(&buf, reinterpret_cast<const std::byte*>(payload.data()), payload.size());
+  }
+  auto content = read_file(path);
+  ASSERT_EQ(content.size(), std::string("prefix:").size() + big);
+  EXPECT_EQ(content.substr(0, 7), "prefix:");
+  EXPECT_EQ(content.substr(7), payload);
+
+  fs::remove(path);
+}
+
+// write_byte when the staging buffer is already full: exercises the
+// "size == kBuffCap" branch of write_byte, which takes the write_file path.
+TEST(FileSink, WriteFull) {
+  const std::size_t cap = bilog::FileSink::kBuffCap;
+
+  auto path = temp_filepath("bilog_filesink_full.bin");
+  {
+    bilog::FileSink sink(path);
+    buf_t buf(bilog::FileSink::kBuffCap);
+    buf.set_sink(&sink);
+
+    std::string padding(cap, 'p');
+
+    sink.write(&buf, reinterpret_cast<const std::byte*>(padding.data()), padding.size());
+    sink.write_byte(&buf, static_cast<std::byte>('!'));  // must flush+append
+  }
+  auto content = read_file(path);
+  ASSERT_EQ(content.size(), cap + 1);
+  EXPECT_EQ(content.back(), '!');
+
+  fs::remove(path);
+}
+
+// Covers FileSink::flush(empty buffer) early return — no I/O, no mutex churn.
+TEST(FileSink, FlushEmptyBufferIsNoOp) {
+  auto path = temp_filepath("bilog_filesink_empty.bin");
+  {
+    bilog::FileSink sink(path);
+    buf_t buf(bilog::FileSink::kBuffCap);
+    buf.set_sink(&sink);
+
+    sink.flush(&buf);
+    sink.flush(&buf);  // still empty
+  }
+  EXPECT_EQ(read_file(path), "");
+  fs::remove(path);
+}
+
 TEST(FileSink, MultithreadedWrites) {
   auto path = temp_filepath("bilog_filesink_mt.bin");
   constexpr int kThreads = 4;

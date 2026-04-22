@@ -19,28 +19,32 @@ def find_build_dir():
 
 
 def run(cmd, cwd=None):
+    """Run a command and capture its output."""
     result = subprocess.run(
         [str(c) for c in cmd], cwd=cwd, capture_output=True, text=True
     )
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Command failed: {' '.join(str(c) for c in cmd)}\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
     return result
 
 
-def compile(source, output):
-    run(
+def compile(workspace):
+    """
+    Build every .cpp under `workspace` into a single `app` binary using CMake.
+    """
+    build_dir = workspace / "build"
+    configure = run(
         [
-            # fmt: off
-            "clang++", "-std=c++23",
-            "-I", PROJECT_ROOT / "bilog" / "include",
-            "-o", output,
-            source, PROJECT_ROOT / "bilog" / "src" / "sink" / "file.cpp",
-            # fmt: on
+            "cmake",
+            "-S",
+            workspace,
+            "-B",
+            build_dir,
+            f"-DBILOG_ROOT={PROJECT_ROOT}",
         ]
     )
+    assert configure.returncode == 0, f"cmake configure failed:\n{configure.stderr}"
+    build = run(["cmake", "--build", build_dir, "--target", "app"])
+    assert build.returncode == 0, f"cmake build failed:\n{build.stderr}"
+    return build_dir / "app"
 
 
 class TestIntegration(unittest.TestCase):
@@ -66,60 +70,54 @@ class TestIntegration(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_full_pipeline(self):
-        """preproc -> compile -> run -> postproc -> compare expected output"""
-        cases = [
-            ("empty_id", "empty_id.cpp"),
-            ("valid_id", "valid_id.cpp"),
-        ]
-        for name, source_name in cases:
-            workspace = self.workspace / name
-            workspace.mkdir()
+        """
+        preproc scans a multi-file project recursively, assigns IDs globally,
+        and emits a single schema that postproc consumes to reproduce the log.
+        """
+        source_dir = DATA_DIR / "multi_file"
+        expected_file = source_dir / "expected.log"
 
-            source_file = DATA_DIR / source_name
-            expected_file = DATA_DIR / (name + ".log")
+        workspace = self.workspace / "project"
+        shutil.copytree(source_dir, workspace)
 
-            test_source = workspace / "app.cpp"
-            shutil.copy2(source_file, test_source)
+        schema_file = workspace / "schema.json"
+        bin_file = workspace / "log.bin"
+        log_file = workspace / "output.log"
 
-            schema_file = workspace / "schema.json"
-            bin_file = workspace / (name + ".bin")
-            log_file = workspace / "output.log"
-            test_binary = workspace / "app"
+        # Preprocess the whole directory (recurses, produces unified schema).
+        run([self.preproc, "-i", workspace, "-o", schema_file])
+        self.assertTrue(schema_file.exists(), "Schema not created")
 
-            # Preprocess
-            run([self.preproc, "-i", test_source, "-o", schema_file])
-            self.assertTrue(schema_file.exists(), "Schema not created")
+        schema = json.loads(schema_file.read_text())
 
-            # Compile
-            compile(test_source, test_binary)
+        # Global tag dedup: "node:" is referenced in every fixture file but
+        # appears exactly once in the schema.
+        tag_names = set(schema["tags"].values())
+        for tag in ("port:", "node:", "percent:", "retries:"):
+            self.assertIn(tag, tag_names)
+        # One event ID per bilog::log call across all files.
+        self.assertEqual(len(schema["events"]), 4)
 
-            # Run
-            run([test_binary], cwd=workspace)
-            self.assertTrue(bin_file.exists(), "Binary log not created")
-            self.assertGreater(bin_file.stat().st_size, 0, "Binary log is empty")
+        # Extension filter: tags that appear only inside a .md file under a
+        # nested subdirectory must not leak into the schema.
+        for md_only_tag in ("markdown_only_tag:", "markdown_only_node:"):
+            self.assertNotIn(md_only_tag, tag_names)
 
-            # Postprocess
-            run([self.postproc, "-s", schema_file, "-i", bin_file, "-o", log_file])
-            self.assertTrue(log_file.exists(), "Output log not created")
+        # Compile all .cpp in the project together into one binary via CMake.
+        test_binary = compile(workspace)
 
-            # Compare
-            actual = log_file.read_text()
-            expected = expected_file.read_text()
-            if actual != expected:
-                # Dump diagnostic state so CI failures are debuggable.
-                print(f"\n--- schema.json ({name}) ---", flush=True)
-                print(schema_file.read_text(), flush=True)
-                print(f"--- rewritten {source_name} ---", flush=True)
-                print(test_source.read_text(), flush=True)
-                print(f"--- bin hex ({bin_file.stat().st_size} bytes) ---", flush=True)
-                print(bin_file.read_bytes().hex(), flush=True)
-                print(f"--- actual output ({name}) ---", flush=True)
-                print(actual, flush=True)
-            self.assertEqual(actual, expected)
+        run([test_binary], cwd=workspace)
+        self.assertTrue(bin_file.exists(), "Binary log not created")
+        self.assertGreater(bin_file.stat().st_size, 0, "Binary log is empty")
+
+        run([self.postproc, "-s", schema_file, "-i", bin_file, "-o", log_file])
+        self.assertTrue(log_file.exists(), "Output log not created")
+
+        self.assertEqual(log_file.read_text(), expected_file.read_text())
 
     def test_preproc_idempotent(self):
         """Running preproc twice produces the same source and schema"""
-        source_file = DATA_DIR / "empty_id.cpp"
+        source_file = DATA_DIR / "single_file" / "main.cpp"
         test_source = self.workspace / "test.cpp"
         shutil.copy2(source_file, test_source)
         schema_file = self.workspace / "schema.json"
@@ -141,7 +139,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_preproc_upd_field(self):
         """Adding a field preserves existing tag IDs"""
-        source_file = DATA_DIR / "empty_id.cpp"
+        source_file = DATA_DIR / "single_file" / "main.cpp"
         test_source = self.workspace / "test.cpp"
         shutil.copy2(source_file, test_source)
         schema_file = self.workspace / "schema.json"
@@ -155,7 +153,6 @@ class TestIntegration(unittest.TestCase):
                 '.cs("node:", "stage1").i("count:", 1U)',
             )
         )
-
         run([self.preproc, "-i", test_source, "-o", schema_file])
 
         schema = json.loads(schema_file.read_text())
@@ -183,13 +180,50 @@ class TestIntegration(unittest.TestCase):
         # fmt: on
         schema_file = self.workspace / "schema.json"
 
-        result = subprocess.run(
-            [str(self.preproc), "-i", str(test_source), "-o", str(schema_file)],
-            capture_output=True,
-            text=True,
-        )
+        result = run([self.preproc, "-i", test_source, "-o", schema_file])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("missing .write()", result.stderr)
+
+    def _run_app(self):
+        """Produce a working (schema, bin) pair by running the empty_id pipeline."""
+        workspace = self.workspace / "postproc_fixture"
+        shutil.copytree(DATA_DIR / "single_file", workspace)
+        schema_file = workspace / "schema.json"
+        bin_file = workspace / "log.bin"
+
+        run([self.preproc, "-i", workspace, "-o", schema_file])
+        test_binary = compile(workspace)
+        run([test_binary], cwd=workspace)
+        return schema_file, bin_file
+
+    def test_postproc_stdout_path(self):
+        """postproc without -o prints to stdout without errors."""
+        schema_file, bin_file = self._run_app()
+
+        result = run([self.postproc, "-s", schema_file, "-i", bin_file])
+        # stderr carries the diagnostic message from the stdout branch
+        self.assertIn("Formatted 3 log entries to stdout", result.stderr)
+
+    def test_postproc_missing_input(self):
+        schema_file, _ = self._run_app()
+        missing = self.workspace / "does_not_exist.bin"
+
+        result = run([self.postproc, "-s", schema_file, "-i", missing])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Failed to open", result.stderr)
+
+    def test_postproc_malformed_schema(self):
+        _, bin_file = self._run_app()
+        bad_schema = self.workspace / "broken.json"
+        bad_schema.write_text("this is not json")
+
+        result = run([self.postproc, "-s", bad_schema, "-i", bin_file])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Failed to parse schema", result.stderr)
+
+    def test_postproc_missing_required_arg(self):
+        result = run([self.postproc])  # no -s, no -i
+        self.assertNotEqual(result.returncode, 0)
 
 
 if __name__ == "__main__":
