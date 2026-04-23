@@ -43,6 +43,7 @@ class Buffer {
 
   void append(const std::byte* data, size_t size) {
     if (cursor_ + size > cap_) [[unlikely]] {
+      append_unsafe(data, cap_ - cursor_);
       return;
     }
     append_unsafe(data, size);

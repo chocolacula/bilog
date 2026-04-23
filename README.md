@@ -72,7 +72,7 @@ bilog::log({<event_id>, <tag_id>, <tag_id>, ...})
     .write();                // finish record
 ```
 
-The preprocessor owns the IDs in `log({...})` and keeps them in sync with your code — add, remove, or reorder fields freely. **DO NOT** edit that list manually - it's better to keep it empty and let the preprocessor assign them.
+The preprocessor owns the IDs in `log({...})` and keeps them in sync with your code - add, remove, or reorder fields freely. **DO NOT** edit that list manually - it's better to keep it empty and let the preprocessor assign them.
 
 More info in [Architecture Overview](readme/architecture.md)
 

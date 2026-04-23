@@ -57,7 +57,8 @@ TEST(PostprocSchema, FieldTypeUnknown) {
 }
 
 TEST(PostprocSchema, InvalidSchema) {
-  auto check = [](std::string_view content) {
+  auto check = [](const char* name, std::string_view content) {
+    SCOPED_TRACE(name);
     auto path = bilog::test::temp_path("invalid.json");
     bilog::test::write_file(path, content);
 
@@ -65,13 +66,14 @@ TEST(PostprocSchema, InvalidSchema) {
 
     fs::remove(path);
   };
-  check("");
-  check("this is not json");
-  check("[1, 2, 3]");
+  check("empty", "");
+  check("not json", "this is not json");
+  check("array", "[1, 2, 3]");
 }
 
 TEST(PostprocSchema, EmptySchema) {
-  auto check = [](std::string_view content) {
+  auto check = [](const char* name, std::string_view content) {
+    SCOPED_TRACE(name);
     auto path = bilog::test::temp_path("empty.json");
     bilog::test::write_file(path, content);
 
@@ -81,12 +83,12 @@ TEST(PostprocSchema, EmptySchema) {
 
     fs::remove(path);
   };
-  check("{}");
-  check(R"({"key":"value"})");  // without "tags" and "events"
-  check(R"({
+  check("empty object", "{}");
+  check("missing tags and events", R"({"key":"value"})");
+  check("wrong value types", R"({
     "tags": {"0": 42, "1": null},
     "events": {"0": "not an array", "1": 42}
-  })");                         // wrong value types
+  })");
 }
 
 TEST(PostprocSchema, FileNotFoundThrows) {

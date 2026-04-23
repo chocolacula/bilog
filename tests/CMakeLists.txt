@@ -10,6 +10,7 @@ add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${CMAKE_SOURCE_DIR}/postproc/schema.cpp
     ${CMAKE_SOURCE_DIR}/preproc/parser.cpp
+    ${CMAKE_SOURCE_DIR}/preproc/schema.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

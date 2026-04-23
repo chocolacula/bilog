@@ -47,7 +47,7 @@ def compile(workspace):
     return build_dir / "app"
 
 
-class TestIntegration(unittest.TestCase):
+class Base(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.build_dir = find_build_dir()
@@ -69,6 +69,8 @@ class TestIntegration(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
+
+class FullPipeline(Base):
     def test_full_pipeline(self):
         """
         preproc scans a multi-file project recursively, assigns IDs globally,
@@ -115,7 +117,9 @@ class TestIntegration(unittest.TestCase):
 
         self.assertEqual(log_file.read_text(), expected_file.read_text())
 
-    def test_preproc_idempotent(self):
+
+class Preproc(Base):
+    def test_idempotent(self):
         """Running preproc twice produces the same source and schema"""
         source_file = DATA_DIR / "single_file" / "main.cpp"
         test_source = self.workspace / "test.cpp"
@@ -137,7 +141,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(source1, source2)
         self.assertEqual(json.loads(schema1), json.loads(schema2))
 
-    def test_preproc_upd_field(self):
+    def test_upd_field(self):
         """Adding a field preserves existing tag IDs"""
         source_file = DATA_DIR / "single_file" / "main.cpp"
         test_source = self.workspace / "test.cpp"
@@ -166,7 +170,7 @@ class TestIntegration(unittest.TestCase):
         event = list(schema["events"]["0"])
         self.assertEqual(event, ["i", "cs", "i", "s"])
 
-    def test_preproc_missing_write(self):
+    def test_missing_write(self):
         """preproc errors on bilog::log() chain without .write()"""
         test_source = self.workspace / "test.cpp"
         # fmt: off
@@ -184,8 +188,10 @@ class TestIntegration(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("missing .write()", result.stderr)
 
+
+class Postproc(Base):
     def _run_app(self):
-        """Produce a working (schema, bin) pair by running the empty_id pipeline."""
+        """Produce a working (schema, bin) pair by running the single_file pipeline."""
         workspace = self.workspace / "postproc_fixture"
         shutil.copytree(DATA_DIR / "single_file", workspace)
         schema_file = workspace / "schema.json"
@@ -196,7 +202,7 @@ class TestIntegration(unittest.TestCase):
         run([test_binary], cwd=workspace)
         return schema_file, bin_file
 
-    def test_postproc_stdout_path(self):
+    def test_stdout_path(self):
         """postproc without -o prints to stdout without errors."""
         schema_file, bin_file = self._run_app()
 
@@ -204,7 +210,7 @@ class TestIntegration(unittest.TestCase):
         # stderr carries the diagnostic message from the stdout branch
         self.assertIn("Formatted 3 log entries to stdout", result.stderr)
 
-    def test_postproc_missing_input(self):
+    def test_missing_input(self):
         schema_file, _ = self._run_app()
         missing = self.workspace / "does_not_exist.bin"
 
@@ -212,7 +218,7 @@ class TestIntegration(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Failed to open", result.stderr)
 
-    def test_postproc_malformed_schema(self):
+    def test_malformed_schema(self):
         _, bin_file = self._run_app()
         bad_schema = self.workspace / "broken.json"
         bad_schema.write_text("this is not json")
@@ -221,7 +227,7 @@ class TestIntegration(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Failed to parse schema", result.stderr)
 
-    def test_postproc_missing_required_arg(self):
+    def test_missing_required_arg(self):
         result = run([self.postproc])  # no -s, no -i
         self.assertNotEqual(result.returncode, 0)
 

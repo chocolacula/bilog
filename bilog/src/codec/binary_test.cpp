@@ -29,7 +29,8 @@ using event_t = bilog::Event<bilog::BinaryEncoder, sink_t>;
 // Tag(1, "msg") has width=1, neg=0 → hi nibble is always 0x0 below.
 
 TEST(BinaryEncoder, Uint) {
-  auto check = [&](auto val, int lo, std::initializer_list<int> payload) {
+  auto check = [&](const char* name, auto val, int lo, std::initializer_list<int> payload) {
+    SCOPED_TRACE(name);
     bilog::BinaryEncoder encoder;
     sink_t sink;
     buf_t buf(sink_t::kBuffCap);
@@ -41,33 +42,30 @@ TEST(BinaryEncoder, Uint) {
     EXPECT_EQ(d[1], static_cast<std::byte>(1));
     std::size_t i = 0;
     for (auto b : payload) {
-      EXPECT_EQ(d[2 + i], static_cast<std::byte>(b)) << "byte " << i;
+      EXPECT_EQ(d[2 + i], static_cast<std::byte>(b));
       ++i;
     }
   };
-
-  // width=1, neg=0 → lo=0x0
-  check(std::uint8_t{0}, 0x00, {0});
-  check(std::uint8_t{42}, 0x00, {42});
-  check(std::numeric_limits<std::uint8_t>::max(), 0x00, {0xFF});
-
-  // width=2, neg=0 → lo=0x1
-  check(std::uint16_t{0x0100}, 0x01, {0x00, 0x01});
-  check(std::numeric_limits<std::uint16_t>::max(), 0x01, {0xFF, 0xFF});
-
-  // width=4, neg=0 → lo=0x3
-  check(std::uint32_t{0x01000000}, 0x03, {0x00, 0x00, 0x00, 0x01});
-  check(std::numeric_limits<std::uint32_t>::max(), 0x03, {0xFF, 0xFF, 0xFF, 0xFF});
-
-  // width=8, neg=0 → lo=0x7
-  check(std::uint64_t{0x0100000000000000}, 0x07, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01});
-  check(std::numeric_limits<std::uint64_t>::max(),
+  check("u8 zero", std::uint8_t{0}, 0x00, {0});
+  check("u8 mid", std::uint8_t{42}, 0x00, {42});
+  check("u8 max", std::numeric_limits<std::uint8_t>::max(), 0x00, {0xFF});
+  check("u16 low high byte set", std::uint16_t{0x0100}, 0x01, {0x00, 0x01});
+  check("u16 max", std::numeric_limits<std::uint16_t>::max(), 0x01, {0xFF, 0xFF});
+  check("u32 high byte set", std::uint32_t{0x01000000}, 0x03, {0x00, 0x00, 0x00, 0x01});
+  check("u32 max", std::numeric_limits<std::uint32_t>::max(), 0x03, {0xFF, 0xFF, 0xFF, 0xFF});
+  check("u64 high byte set",
+        std::uint64_t{0x0100000000000000},
+        0x07,
+        {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01});
+  check("u64 max",
+        std::numeric_limits<std::uint64_t>::max(),
         0x07,
         {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF});
 }
 
 TEST(BinaryEncoder, Int) {
-  auto check = [&](auto val, int lo, std::initializer_list<int> payload) {
+  auto check = [&](const char* name, auto val, int lo, std::initializer_list<int> payload) {
+    SCOPED_TRACE(name);
     bilog::BinaryEncoder encoder;
     sink_t sink;
     buf_t buf(sink_t::kBuffCap);
@@ -80,30 +78,29 @@ TEST(BinaryEncoder, Int) {
     EXPECT_EQ(d[1], static_cast<std::byte>(1));
     std::size_t i = 0;
     for (auto b : payload) {
-      EXPECT_EQ(d[2 + i], static_cast<std::byte>(b)) << "byte " << i;
+      EXPECT_EQ(d[2 + i], static_cast<std::byte>(b));
       ++i;
     }
   };
-
-  // Positive: same layout as unsigned (neg=0).
-  check(std::int32_t{1}, 0x00, {1});
-  check(std::int32_t{42}, 0x00, {42});
-  check(std::numeric_limits<std::int32_t>::max(), 0x03, {0xFF, 0xFF, 0xFF, 0x7F});
-  check(std::numeric_limits<std::int64_t>::max(),
+  check("i32 one", std::int32_t{1}, 0x00, {1});
+  check("i32 positive mid", std::int32_t{42}, 0x00, {42});
+  check("i32 max", std::numeric_limits<std::int32_t>::max(), 0x03, {0xFF, 0xFF, 0xFF, 0x7F});
+  check("i64 max",
+        std::numeric_limits<std::int64_t>::max(),
         0x07,
         {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F});
-
-  // Negative: zigzag-encoded, neg=1 → lo nibble gets 0x8 bit set.
-  check(std::int32_t{-1}, 0x08, {1});    // zigzag(-1) = 1
-  check(std::int32_t{-42}, 0x08, {83});  // zigzag(-42) = 83
-  check(std::numeric_limits<std::int32_t>::min(), 0x0B, {0xFF, 0xFF, 0xFF, 0xFF});
-  check(std::numeric_limits<std::int64_t>::min(),
+  check("i32 -1 zigzag", std::int32_t{-1}, 0x08, {1});
+  check("i32 -42 zigzag", std::int32_t{-42}, 0x08, {83});
+  check("i32 min", std::numeric_limits<std::int32_t>::min(), 0x0B, {0xFF, 0xFF, 0xFF, 0xFF});
+  check("i64 min",
+        std::numeric_limits<std::int64_t>::min(),
         0x0F,
         {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF});
 }
 
 TEST(BinaryEncoder, Float) {
-  auto check = [&](auto val, int lo) {
+  auto check = [&](const char* name, auto val, int lo) {
+    SCOPED_TRACE(name);
     bilog::BinaryEncoder encoder;
     sink_t sink;
     buf_t buf(sink_t::kBuffCap);
@@ -119,9 +116,8 @@ TEST(BinaryEncoder, Float) {
     std::memcpy(&decoded, d.data() + 2, sizeof(val));
     EXPECT_EQ(decoded, val);
   };
-
-  check(73.5F, 0x03);       // float, width=4, neg=0
-  check(12345.6789, 0x07);  // double, width=8, neg=0
+  check("float", 73.5F, 0x03);
+  check("double", 12345.6789, 0x07);
 }
 
 TEST(BinaryEncoder, String) {
@@ -151,10 +147,9 @@ TEST(BinaryEncoder, Tag) {
   EXPECT_EQ(d[2], static_cast<std::byte>(2));
 }
 
-// --- BinaryFormatter tests ---
-
 TEST(BinaryFormatter, Types) {
-  auto check = [&](auto val, bilog::FieldType type, std::string_view expected) {
+  auto check = [&](const char* name, auto val, bilog::FieldType type, std::string_view expected) {
+    SCOPED_TRACE(name);
     bilog::BinaryEncoder encoder;
     sink_t sink;
     buf_t buf(sink_t::kBuffCap);
@@ -176,19 +171,19 @@ TEST(BinaryFormatter, Types) {
     ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
     EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), expected);
   };
-
-  check(42, bilog::FieldType::Int, "[INFO] msg, val: 42\n");
-  check(-42, bilog::FieldType::Int, "[INFO] msg, val: -42\n");
-  check(std::numeric_limits<std::int64_t>::min(),
+  check("int positive", 42, bilog::FieldType::Int, "[INFO] msg, val: 42\n");
+  check("int negative", -42, bilog::FieldType::Int, "[INFO] msg, val: -42\n");
+  check("int min",
+        std::numeric_limits<std::int64_t>::min(),
         bilog::FieldType::Int,
         "[INFO] msg, val: -9223372036854775808\n");
-  check(std::numeric_limits<std::int64_t>::max(),
+  check("int max",
+        std::numeric_limits<std::int64_t>::max(),
         bilog::FieldType::Int,
         "[INFO] msg, val: 9223372036854775807\n");
-
-  check(true, bilog::FieldType::Bool, "[INFO] msg, val: true\n");
-  check(75.3F, bilog::FieldType::Float, "[INFO] msg, val: 75.3\n");
-  check("some string", bilog::FieldType::String, "[INFO] msg, val: some string\n");
+  check("bool", true, bilog::FieldType::Bool, "[INFO] msg, val: true\n");
+  check("float", 75.3F, bilog::FieldType::Float, "[INFO] msg, val: 75.3\n");
+  check("string", "some string", bilog::FieldType::String, "[INFO] msg, val: some string\n");
 }
 
 TEST(BinaryFormatter, MultipleRecords) {
@@ -221,7 +216,8 @@ TEST(BinaryFormatter, MultipleRecords) {
   ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
   EXPECT_FALSE(fmt.format(&out_buf, &out, tags, events));
 
-  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[ERROR] shutdown code: 7\n[TRACE] heartbeat\n");
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out),
+            "[ERROR] shutdown code: 7\n[TRACE] heartbeat\n");
 }
 
 TEST(BinaryFormatter, NoSchema) {
@@ -246,7 +242,159 @@ TEST(BinaryFormatter, NoSchema) {
   EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[DEBUG] 99\n");
 }
 
-// --- MinLevel tests ---
+TEST(BinaryEncoder, LongString) {
+  // String >255 bytes forces the 2-byte length-prefix path (wb == 2 in encode_pair).
+  bilog::BinaryEncoder encoder;
+  sink_t sink;
+  buf_t buf(sink_t::kBuffCap);
+
+  std::string long_str(300, 'x');
+  encoder.encode_pair(&buf, &sink, bilog::Tag(1, "msg"), long_str);
+  auto d = bilog::test::drain(&buf, &sink);
+
+  // Header byte: hi nibble = code(neg_a=0, width_a=1) = 0x0.
+  //              lo nibble = code(neg_b=0, width_b=2) = 0x1.
+  // Total: 1 (header) + 1 (tag id) + 2 (len16 = 300 = 0x012C little-endian) + 300 = 304.
+  ASSERT_EQ(d.size(), 304U);
+  EXPECT_EQ(d[0], static_cast<std::byte>(0x01));
+  EXPECT_EQ(d[1], static_cast<std::byte>(1));
+  EXPECT_EQ(d[2], static_cast<std::byte>(0x2C));
+  EXPECT_EQ(d[3], static_cast<std::byte>(0x01));
+}
+
+TEST(BinaryFormatter, ZeroInt) {
+  // write_uint has a special branch for val == 0.
+  bilog::BinaryEncoder encoder;
+  sink_t sink;
+  buf_t buf(sink_t::kBuffCap);
+
+  encoder.encode_pair(&buf, &sink, std::uint64_t{0}, bilog::Level::kInfo.to_byte());
+  encoder.encode_pair(&buf, &sink, bilog::Tag(0, "msg"), std::uint8_t{0});
+  encoder.encode_pair(&buf, &sink, bilog::Tag(1, "n:"), std::uint64_t{0});
+  encoder.commit(&buf, &sink);
+
+  auto bin = bilog::test::drain(&buf, &sink);
+  std::unordered_map<std::uint64_t, std::string> tags = {{0, "msg"}, {1, "n:"}};
+  std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {
+      {0, {bilog::FieldType::Int}}};
+
+  std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+  bilog::BinaryFormatter fmt(&in);
+  sink_t out;
+  buf_t out_buf(sink_t::kBuffCap);
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[INFO] msg n: 0\n");
+}
+
+TEST(BinaryFormatter, CStr) {
+  // FieldType::CStr path in format_scalar: value.u64 is a tag ID, resolved via tag_names.
+  bilog::BinaryEncoder encoder;
+  sink_t sink;
+  buf_t buf(sink_t::kBuffCap);
+
+  encoder.encode_pair(&buf, &sink, std::uint64_t{0}, bilog::Level::kInfo.to_byte());
+  encoder.encode_pair(&buf, &sink, bilog::Tag(0, "msg"), std::uint8_t{0});
+  encoder.encode_pair(&buf, &sink, bilog::Tag(1, "node:"), bilog::Tag(2, "stage1"));
+  encoder.commit(&buf, &sink);
+
+  auto bin = bilog::test::drain(&buf, &sink);
+  std::unordered_map<std::uint64_t, std::string> tags = {{0, "msg"}, {1, "node:"}, {2, "stage1"}};
+  std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {
+      {0, {bilog::FieldType::CStr}}};
+
+  std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+  bilog::BinaryFormatter fmt(&in);
+  sink_t out;
+  buf_t out_buf(sink_t::kBuffCap);
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[INFO] msg node: stage1\n");
+}
+
+TEST(BinaryFormatter, InvalidLevel) {
+  // If Level::from_byte returns nullopt, the formatter still writes the
+  // brackets with no name inside.
+  bilog::BinaryEncoder encoder;
+  sink_t sink;
+  buf_t buf(sink_t::kBuffCap);
+
+  encoder.encode_pair(&buf, &sink, std::uint64_t{0}, static_cast<std::byte>(99));
+  encoder.encode_pair(&buf, &sink, bilog::Tag(0, "msg"), std::uint8_t{0});
+  encoder.commit(&buf, &sink);
+
+  auto bin = bilog::test::drain(&buf, &sink);
+  std::unordered_map<std::uint64_t, std::string> tags = {{0, "msg"}};
+  std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {{0, {}}};
+
+  std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+  bilog::BinaryFormatter fmt(&in);
+  sink_t out;
+  buf_t out_buf(sink_t::kBuffCap);
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[] msg\n");
+}
+
+TEST(BinaryFormatter, DoubleAndFalse) {
+  // Double (width=8) takes the non-float branch in format_scalar; bool false
+  // takes the false side of the ternary.
+  bilog::BinaryEncoder encoder;
+  sink_t sink;
+  buf_t buf(sink_t::kBuffCap);
+
+  encoder.encode_pair(&buf, &sink, std::uint64_t{0}, bilog::Level::kInfo.to_byte());
+  encoder.encode_pair(&buf, &sink, bilog::Tag(0, "msg"), std::uint8_t{0});
+  encoder.encode_pair(&buf, &sink, bilog::Tag(1, "f:"), 3.14);
+  encoder.encode_pair(&buf, &sink, bilog::Tag(2, "b:"), false);
+  encoder.commit(&buf, &sink);
+
+  auto bin = bilog::test::drain(&buf, &sink);
+  std::unordered_map<std::uint64_t, std::string> tags = {{0, "msg"}, {1, "f:"}, {2, "b:"}};
+  std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {
+      {0, {bilog::FieldType::Float, bilog::FieldType::Bool}}};
+
+  std::istringstream in(std::string(reinterpret_cast<const char*>(bin.data()), bin.size()));
+  bilog::BinaryFormatter fmt(&in);
+  sink_t out;
+  buf_t out_buf(sink_t::kBuffCap);
+  ASSERT_TRUE(fmt.format(&out_buf, &out, tags, events));
+  EXPECT_EQ(bilog::test::drain_str(&out_buf, &out), "[INFO] msg f: 3.14 b: false\n");
+}
+
+TEST(BinaryFormatter, TruncatedStreams) {
+  // Build a well-formed two-field record once, then feed prefixes of it to the
+  // formatter. Every truncation point must be detected as format() == false
+  // rather than writing garbage or crashing.
+  bilog::BinaryEncoder encoder;
+  sink_t sink;
+  buf_t buf(sink_t::kBuffCap);
+
+  encoder.encode_pair(&buf, &sink, std::uint64_t{0}, bilog::Level::kInfo.to_byte());
+  encoder.encode_pair(&buf, &sink, bilog::Tag(0, "msg"), std::uint8_t{0});
+  encoder.encode_pair(&buf, &sink, bilog::Tag(1, "n:"), std::uint64_t{42});
+  encoder.encode_pair(&buf, &sink, bilog::Tag(2, "s:"), std::string("hello"));
+  encoder.commit(&buf, &sink);
+
+  auto bin = bilog::test::drain(&buf, &sink);
+  std::string full(reinterpret_cast<const char*>(bin.data()), bin.size());
+
+  std::unordered_map<std::uint64_t, std::string> tags = {{0, "msg"}, {1, "n:"}, {2, "s:"}};
+  std::unordered_map<std::uint64_t, std::vector<bilog::FieldType>> events = {
+      {0, {bilog::FieldType::Int, bilog::FieldType::String}}};
+
+  auto check = [&](const char* name, std::size_t prefix_len) {
+    SCOPED_TRACE(name);
+    std::istringstream in(full.substr(0, prefix_len));
+    bilog::BinaryFormatter fmt(&in);
+    sink_t out;
+    buf_t out_buf(sink_t::kBuffCap);
+    EXPECT_FALSE(fmt.format(&out_buf, &out, tags, events));
+  };
+  check("empty stream (eof at pair 0 header)", 0);
+  check("pair 0 header only", 1);
+  check("pair 0 partial payload", 2);
+  check("pair 1 truncated", 4);
+  check("dynamic int field header only", 7);
+  check("dynamic string field header+len, payload missing", 12);
+}
 
 TEST(MinLevel, Allows) {
   bilog::BinaryEncoder encoder;
@@ -266,14 +414,4 @@ TEST(MinLevel, Allows) {
     EXPECT_GT(sink.available(), 0U);
     sink.clear();
   }
-}
-
-TEST(MinLevel, Blocks) {
-  bilog::BinaryEncoder encoder;
-  sink_t sink;
-  buf_t buf(sink_t::kBuffCap);
-
-  event_t event(bilog::Level::kError, &encoder, &buf, &sink, {0, 1, 2});
-  event.info("msg").i("val:", std::uint8_t{42}).write();
-  EXPECT_EQ(sink.available(), 0U);
 }

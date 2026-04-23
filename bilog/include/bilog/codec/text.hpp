@@ -4,7 +4,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
+#include <iterator>
 #include <string_view>
 
 #include "bilog/level.hpp"
@@ -71,8 +71,7 @@ class TextEncoder {
     auto lvl = Level::from_byte(lvl_byte);
     write_byte(lb, sink, '[');
     if (lvl) {
-      auto name = lvl->to_str();
-      write_str(lb, sink, *name);
+      write_str(lb, sink, lvl->to_str());
     }
     write_byte(lb, sink, ']');
     write_byte(lb, sink, ' ');
@@ -91,17 +90,15 @@ class TextEncoder {
   template <typename SinkT, std::integral T>
   static void write_value(Buffer<SinkT>* lb, SinkT* sink, const T& val) {
     char buf[20];
-    auto result = std::to_chars(buf, buf + sizeof(buf), val);
+    auto result = std::to_chars(std::begin(buf), std::end(buf), val);
     write_str(lb, sink, std::string_view(buf, static_cast<std::size_t>(result.ptr - buf)));
   }
 
   template <typename SinkT, std::floating_point T>
   static void write_value(Buffer<SinkT>* lb, SinkT* sink, const T& val) {
     char buf[32];
-    auto len = std::snprintf(buf, sizeof(buf), "%g", static_cast<double>(val));
-    if (len > 0) {
-      write_str(lb, sink, std::string_view(buf, static_cast<std::size_t>(len)));
-    }
+    auto result = std::to_chars(std::begin(buf), std::end(buf), val, std::chars_format::general);
+    write_str(lb, sink, std::string_view(buf, static_cast<std::size_t>(result.ptr - buf)));
   }
 
   template <typename SinkT>

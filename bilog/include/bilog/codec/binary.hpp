@@ -207,10 +207,7 @@ class BinaryFormatter {
     sink->write_byte(lb, static_cast<std::byte>('['));
     auto lvl = Level::from_byte(level_byte);
     if (lvl) {
-      auto name = lvl->to_str();
-      if (name) {
-        write_str(lb, sink, *name);
-      }
+      write_str(lb, sink, lvl->to_str());
     }
     sink->write_byte(lb, static_cast<std::byte>(']'));
     sink->write_byte(lb, static_cast<std::byte>(' '));

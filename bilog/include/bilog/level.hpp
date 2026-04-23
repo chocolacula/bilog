@@ -1,6 +1,7 @@
 #pragma once
 
 #include <compare>
+#include <cstddef>
 #include <optional>
 #include <string_view>
 
@@ -18,7 +19,9 @@ class Level {
                                                 "FATAL"};
 
  public:
-  constexpr std::optional<std::string_view> to_str() const {
+  // Class invariant: val_ is always in [0, size(levels)), so the array index
+  // is always valid — no optional needed.
+  constexpr std::string_view to_str() const {
     return levels  // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
         [static_cast<size_t>(val_)];
   }
@@ -34,7 +37,7 @@ class Level {
   constexpr friend bool operator==(Level lhs, Level rhs) = default;
 
   static std::optional<Level> from_byte(std::byte val) {
-    if (val >= kTrace.to_byte() and val <= kFatal.to_byte()) {
+    if (val <= kFatal.to_byte()) {
       return Level(val);
     }
     return std::nullopt;

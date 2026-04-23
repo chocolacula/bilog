@@ -102,46 +102,55 @@ TEST(PreprocUtil, ConsumeLiteral) {
 }
 
 TEST(PreprocUtil, FindMatching) {
-  auto check =
-      [](std::string_view src, char open, char close, std::optional<std::size_t> expected) {
-        auto end = preproc::find_matching(src, 0, open, close);
-        EXPECT_EQ(end, expected);
-      };
-  check("(abc)", '(', ')', 4);
-  check("(a(b)c)", '(', ')', 6);
-  check("{1, 2, {3}, 4}", '{', '}', 13);
-  check("(\")\") foo", '(', ')', 4);       // paren inside string literal is skipped
-  check(R"(("a\"b"))", '(', ')', 7);       // escaped quote does not terminate string
-  check("(a(b)", '(', ')', std::nullopt);  // escaped quote does not terminate string
+  auto check = [](const char* name,
+                  std::string_view src,
+                  char open,
+                  char close,
+                  std::optional<std::size_t> expected) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(preproc::find_matching(src, 0, open, close), expected);
+  };
+  check("flat parens", "(abc)", '(', ')', 4);
+  check("nested parens", "(a(b)c)", '(', ')', 6);
+  check("nested braces", "{1, 2, {3}, 4}", '{', '}', 13);
+  check("paren inside string literal", "(\")\") foo", '(', ')', 4);
+  check("escaped quote inside string", R"(("a\"b"))", '(', ')', 7);
+  check("unbalanced", "(a(b)", '(', ')', std::nullopt);
 }
 
 TEST(PreprocUtil, ParseString) {
-  auto check = [](std::string_view src, const std::optional<std::string>& expected) {
+  auto check = [](const char* name,
+                  std::string_view src,
+                  const std::optional<std::string>& expected) {
+    SCOPED_TRACE(name);
     std::size_t cur = 0;
     EXPECT_EQ(preproc::parse_string_literal(src, cur), expected);
   };
-  check(R"("hello")", "hello");
-  check(R"(   "x")", "x");  // leading whitespace skipped
-  check(R"("")", "");
-  check(R"("a\\b")", "a\\b");  // escapes
-  check(R"("a\"b")", "a\"b");
-  check(R"("a\nb")", "a\nb");
-  check(R"("a\tb")", "a\tb");
-  check(R"("\q")", "q");
-  check("foo", std::nullopt);      // no opening quote
-  check(R"("abc)", std::nullopt);  // unterminated
+  check("plain", R"("hello")", "hello");
+  check("leading whitespace", R"(   "x")", "x");
+  check("empty", R"("")", "");
+  check("backslash escape", R"("a\\b")", "a\\b");
+  check("quote escape", R"("a\"b")", "a\"b");
+  check("newline escape", R"("a\nb")", "a\nb");
+  check("tab escape", R"("a\tb")", "a\tb");
+  check("unknown escape falls back to char", R"("\q")", "q");
+  check("no opening quote", "foo", std::nullopt);
+  check("unterminated", R"("abc)", std::nullopt);
 }
 
 TEST(PreprocUtil, ParseUint) {
-  auto check = [](std::string_view src, std::optional<std::uint64_t> expected) {
+  auto check = [](const char* name,
+                  std::string_view src,
+                  std::optional<std::uint64_t> expected) {
+    SCOPED_TRACE(name);
     std::size_t cur = 0;
     EXPECT_EQ(preproc::parse_uint_literal(src, cur), expected);
   };
-  check("42", 42U);
-  check("   123", 123U);  // leading whitespace skipped
-  check("1'000'000", 1'000'000U);
-  check("8080UL", 8080U);      // suffix letters consumed as part of the token
-  check("xyz", std::nullopt);  // no digits — cur stays at 0
+  check("plain", "42", 42U);
+  check("leading whitespace", "   123", 123U);
+  check("digit separator", "1'000'000", 1'000'000U);
+  check("with suffix", "8080UL", 8080U);
+  check("no digits", "xyz", std::nullopt);
 }
 
 TEST(PreprocUtil, CollectSourcesFile) {

@@ -87,7 +87,7 @@ TEST(PreprocParser, SkipsComments) {
 }
 
 TEST(PreprocParser, MissingWrite) {
-  auto a = analyze("bilog::log({}).info(\"oops\").i(\"n:\", 1U);");
+  auto a = analyze(R"(bilog::log({}).info("oops").i("n:", 1U);)");
   ASSERT_EQ(a.calls.size(), 1U);
   EXPECT_FALSE(a.calls[0].has_write);
   ASSERT_EQ(a.errors.size(), 1U);
@@ -95,17 +95,27 @@ TEST(PreprocParser, MissingWrite) {
 }
 
 TEST(PreprocParser, RejectsMalformed) {
-  // None of these are well-formed bilog::log(...) calls,
-  // parse_log_call must return nullopt so no LogCall is recorded.
-  for (std::string_view src : {
-           "bilog::log",              // no paren at all
-           "bilog::log foo",          // ident after, no paren
-           "bilog::log(",             // unmatched open paren
-           "bilog::log(foo)",         // no brace inside parens
-           "bilog::log({",            // unmatched brace
-           "bilog::log({}).write()",  // empty chain (only .write())
-       }) {
+  auto check = [](const char* name, std::string_view src) {
+    SCOPED_TRACE(name);
     auto a = analyze(src);
     EXPECT_TRUE(a.calls.empty());
-  }
+  };
+  check("no paren", "bilog::log");
+  check("ident after, no paren", "bilog::log foo");
+  check("unmatched open paren", "bilog::log(");
+  check("no brace inside parens", "bilog::log(foo)");
+  check("unmatched open brace at end", "bilog::log({");
+  check("unmatched open brace mid-parens", "bilog::log({)");
+  check("empty chain (only .write())", "bilog::log({}).write()");
+}
+
+TEST(PreprocParser, UnderscoreMethod) {
+  // Method-name scanner accepts isalnum() || '_'. Exercises the `_` branch in
+  // both parse_chain_calls and parse_log_call's .write() lookahead scan.
+  auto a = analyze("bilog::log({}).my_method(\"tag:\").write();");
+  ASSERT_EQ(a.calls.size(), 1U);
+  EXPECT_TRUE(a.calls[0].has_write);
+  ASSERT_EQ(a.calls[0].chain.size(), 1U);
+  EXPECT_EQ(a.calls[0].chain[0].method, "my_method");
+  EXPECT_EQ(a.calls[0].chain[0].tag, "tag:");
 }

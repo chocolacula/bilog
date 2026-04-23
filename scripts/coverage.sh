@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 BUILD_DIR="$PWD/build/Debug"
 PROF_DIR="$BUILD_DIR/coverage"
 MERGED="$PROF_DIR/merged.profdata"
-IGNORE_REGEX='(/build/|/tests/|/benches/|/examples/)'
+IGNORE_REGEX='(/build/|/tests/|/benches/|/examples/|_test\.cpp)'
 
 mkdir -p "$PROF_DIR"
 rm -f "$PROF_DIR"/*.profraw "$MERGED"

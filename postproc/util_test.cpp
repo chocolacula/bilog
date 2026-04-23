@@ -10,7 +10,8 @@
 namespace fs = std::filesystem;
 
 TEST(PostprocUtil, ReadFile) {
-  auto check = [](std::string_view content) {
+  auto check = [](const char* name, std::string_view content) {
+    SCOPED_TRACE(name);
     auto path = bilog::test::temp_path("file.txt");
     bilog::test::write_file(path, content);
 
@@ -18,11 +19,11 @@ TEST(PostprocUtil, ReadFile) {
 
     fs::remove(path);
   };
-  check("");
-  check("hello world");
+  check("empty", "");
+  check("ascii", "hello world");
 
   auto bytes = std::vector<char>{'\x00', '\x01', 'A', '\x00', '\xFF', '\n'};
-  check(std::string_view(bytes.data(), bytes.size()));
+  check("binary with nulls", std::string_view(bytes.data(), bytes.size()));
 }
 
 TEST(PostprocUtil, ReadFileMissingThrows) {
